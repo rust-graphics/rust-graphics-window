@@ -1,0 +1,17 @@
+[package]
+name = "rust_graphics_window"
+version = "0.1.0"
+authors = ["Hossein Noroozpour <hossein.noroozpour@gmail.com>"]
+description = "A simple, small and minimal windowing library"
+repository = "https://github.com/rust-graphics/rust-graphics-window"
+license = "MIT"
+readme = "README.md"
+keywords = ["ffi", "window", "graphics"]
+categories = ["graphics"]
+
+[dependencies]
+bitflags = "1.2"
+libc = "0.2"
+
+rust_graphics_library_loader = "0.1"
+rust_graphics_log = "0.1"
