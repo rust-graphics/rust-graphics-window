@@ -1,25 +1,23 @@
+use super::super::event::*;
 use super::xcb;
 use super::xproto;
 
 use log::{log_e, log_f, log_i, result_f, unwrap_f};
-use std::ffi::CString;
-use std::mem::transmute;
-use std::os::raw::{c_int, c_uint};
-use std::ptr::null_mut;
-use std::sync::{Arc, RwLock};
+use std::{
+    ffi::CString,
+    fmt,
+    mem::transmute,
+    os::raw::{c_int, c_uint},
+    ptr::null_mut,
+    sync::{Arc, RwLock},
+};
 
-#[derive(Debug)]
 pub struct Window {
     xcb_lib: xcb::Xcb,
     connection: *mut xcb::Connection,
     screen: *mut xcb::Screen,
     window: xcb::Window,
     atom_wm_delete_window: *mut xcb::InternAtomReply,
-    window_width: i64,
-    window_height: i64,
-    window_aspect_ratio: f64,
-    mouse_position_x: i64,
-    mouse_position_y: i64,
 }
 
 impl Window {
@@ -110,207 +108,156 @@ impl Window {
             screen,
             window,
             atom_wm_delete_window,
-            window_width,
-            window_height,
-            window_aspect_ratio,
-            mouse_position_x: 0,
-            mouse_position_y: 0,
         }
     }
 
-    // pub fn run(&self) {
-    //     'main_loop: loop {
-    //         let events = self.fetch_events();
-    //         for e in events {
-    //             match e.event_type {
-    //                 EventType::Quit => {
-    //                     // todo
-    //                     // terminate core
-    //                     // terminate renderer
-    //                     // terminate audio engine
-    //                     // terminate physic engine
-    //                     break 'main_loop;
-    //                 }
-    //                 _ => (),
-    //             }
-    //             result_f!(unwrap_f!(&self.core_app).read()).on_event(e);
-    //         }
-    //         result_f!(unwrap_f!(&self.core_app).write()).update();
-    //         result_f!(unwrap_f!(&self.renderer).read()).update();
-    //     }
-    // }
+    pub fn fetch_events(&mut self) {
+        loop {
+            let xcb_event = (self.xcb_lib.poll_for_event)(self.connection);
+            if xcb_event == null_mut() {
+                break;
+            }
+            self.translate(unsafe { transmute(xcb_event) });
+            unsafe {
+                libc::free(transmute(xcb_event));
+            }
+        }
+    }
 
-    // pub fn get_mouse_position(&self) -> (Real, Real) {
-    //     get_mouse_position(self.connection, self.window, self.screen)
-    // }
+    fn translate(&mut self, e: &xcb::GenericEvent) -> Option<Event> {
+        let client_msg: &xcb::ClientMessageEvent = unsafe { transmute(e) };
+        match e.response_type as c_uint & 0x7F {
+            xproto::DESTROY_NOTIFY => {
+                if client_msg.data.data[0] == unsafe { (*self.atom_wm_delete_window).atom } {
+                    return Some(Event::new(Data::Quit));
+                }
+            } // xproto::CLIENT_MESSAGE => {
+            //     if client_msg.data.data[0] == unsafe { (*self.atom_wm_delete_window).atom } {}
+            // }
+            // xproto::MOTION_NOTIFY => {
+            //     let pre = (self.mouse_position_x, self.mouse_position_y);
+            //     self.update_mouse_position();
+            //     let cur = (self.mouse_position_x, self.mouse_position_y);
+            //     let delta = (cur.0 - pre.0, cur.1 - pre.1);
+            //     if let Some(fun) = self.on_mouse_movment.as_ref() {
+            //         fun(pre, cur, delta);
+            //     }
+            // }
+            // xproto::BUTTON_PRESS => {
+            //     let press: &mut xcb::ButtonPressEvent = unsafe { transmute(e) };
+            //     let m: xcb::ButtonIndex = unsafe { transmute(press.detail as u32) };
+            //     let m = match m {
+            //         xcb::ButtonIndex::Index1 => Mouse::Left,
+            //         xcb::ButtonIndex::Index2 => Mouse::Middle,
+            //         xcb::ButtonIndex::Index3 => Mouse::Right,
+            //         _ => {
+            //             log_i!("Unknown mouse button pressed.");
+            //             Mouse::Left
+            //         }
+            //     };
+            //     return Some(EventType::Button {
+            //         button: Button::Mouse(m),
+            //         action: event::ButtonAction::Press,
+            //     });
+            // }
+            // xproto::BUTTON_RELEASE => {
+            //     let release: &mut xcb::ButtonReleaseEvent = unsafe { transmute(e) };
+            //     let m: xcb::ButtonIndex = unsafe { transmute(release.detail as u32) };
+            //     let m = match m {
+            //         xcb::ButtonIndex::_Index1 => Mouse::Left,
+            //         xcb::ButtonIndex::_Index2 => Mouse::Middle,
+            //         xcb::ButtonIndex::_Index3 => Mouse::Right,
+            //         _ => {
+            //             log_e!("Unknown mouse button pressed.");
+            //             Mouse::Left
+            //         }
+            //     };
+            //     return Some(EventType::Button {
+            //         button: Button::Mouse(m),
+            //         action: event::ButtonAction::Release,
+            //     });
+            // }
+            // a @ xproto::KEY_PRESS | a @ xproto::KEY_RELEASE => {
+            //     let key_event: &xcb::KeyReleaseEvent = unsafe { transmute(e) };
+            //     let b = Button::Keyboard(match key_event.detail {
+            //         xproto::KEY_W => Keyboard::W,
+            //         xproto::KEY_S => Keyboard::S,
+            //         xproto::KEY_A => Keyboard::A,
+            //         xproto::KEY_D => Keyboard::D,
+            //         // xproto::KEY_P => { Keyboard::P },
+            //         xproto::KEY_F1 => Keyboard::Function(1),
+            //         k @ _ => {
+            //             log_i!("Unknown key: {:?} presse", k);
+            //             Keyboard::W
+            //         }
+            //     });
+            //     return Some(if a == xproto::KEY_RELEASE {
+            //         EventType::Button {
+            //             button: b,
+            //             action: event::ButtonAction::Release,
+            //         }
+            //     } else {
+            //         EventType::Button {
+            //             button: b,
+            //             action: event::ButtonAction::Press,
+            //         }
+            //     });
+            // }
+            // xproto::CONFIGURE_NOTIFY => {
+            //     let cfg_event: &xcb::ConfigureNotifyEvent = unsafe { transmute(e) };
+            //     // if cfg_event.width as Real != self.window_aspects.0 ||
+            //     //     cfg_event.height as Real != self.window_aspects.1
+            //     // {
+            //     if cfg_event.width > 0 && cfg_event.height > 0 {
+            //         return Some(EventType::Window(Window::SizeChange {
+            //             w: cfg_event.width as Real,
+            //             h: cfg_event.height as Real,
+            //             ratio: (cfg_event.width as Real) / (cfg_event.height as Real),
+            //             pre_w: 0.0,
+            //             pre_h: 0.0,
+            //             pre_ratio: 0.0,
+            //         }));
+            //     }
+            //     // }
+            // }
+            c @ _ => {
+                log_i!("Uncontrolled event: {:?}", c);
+            }
+        }
+        None
+    }
 
-    // pub fn get_window_ratio(&self) -> f64 {
-    //     unsafe { (*self.screen).width_in_pixels as f64 / (*self.screen).height_in_pixels as f64 }
-    // }
+    pub(crate) fn get_window(&self) -> xcb::Window {
+        return self.window;
+    }
 
-    // pub fn fetch_events(&self) -> Vec<Event> {
-    //     let mut events = Vec::new();
-    //     loop {
-    //         let xcb_event = unsafe { xcb_lib.poll_for_event(self.connection) };
-    //         if xcb_event == null_mut() {
-    //             break;
-    //         }
-    //         let e = self.translate(xcb_event);
-    //         if let Some(e) = e {
-    //             events.push(Event::new(e));
-    //         }
-    //         unsafe {
-    //             libc::free(transmute(xcb_event));
-    //         }
-    //     }
-    //     return events;
-    // }
+    pub(crate) fn get_connection(&self) -> *mut xcb::Connection {
+        return self.connection;
+    }
 
-    // fn translate(&self, e: *mut xcb::GenericEvent) -> Option<EventType> {
-    //     unsafe {
-    //         if (xproto::DESTROY_NOTIFY as u8 == ((*e).response_type & 0x7f))
-    //             || ((xproto::CLIENT_MESSAGE as u8 == ((*e).response_type & 0x7f))
-    //                 && ((*transmute::<*mut xcb::GenericEvent, *mut xcb::ClientMessageEvent>(e))
-    //                     .data
-    //                     .data[0]
-    //                     == (*self.atom_wm_delete_window).atom))
-    //         {
-    //             return Some(EventType::Quit);
-    //         }
-    //     }
-    //     match unsafe { (*e).response_type as c_uint & 0x7F } {
-    //         xproto::CLIENT_MESSAGE => {
-    //             let client_msg: &mut xcb::ClientMessageEvent = unsafe { transmute(e) };
-    //             if client_msg.data.data[0] == unsafe { (*self.atom_wm_delete_window).atom } {
-    //                 return Some(EventType::Quit);
-    //             }
-    //         }
-    //         xproto::MOTION_NOTIFY => {
-    //             let pos = self.get_mouse_position();
-    //             let pre = *result_f!(self.current_mouse_position.read());
-    //             *result_f!(self.current_mouse_position.write()) = pos;
-    //             return Some(EventType::Move(event::Move::Mouse {
-    //                 previous: pre,
-    //                 current: pos,
-    //                 delta: (pos.0 - pre.0, pos.1 - pre.1),
-    //             }));
-    //         }
-    //         xproto::BUTTON_PRESS => {
-    //             let press: &mut xcb::ButtonPressEvent = unsafe { transmute(e) };
-    //             let m: xcb::ButtonIndex = unsafe { transmute(press.detail as u32) };
-    //             let m = match m {
-    //                 xcb::ButtonIndex::_Index1 => Mouse::Left,
-    //                 xcb::ButtonIndex::_Index2 => Mouse::Middle,
-    //                 xcb::ButtonIndex::_Index3 => Mouse::Right,
-    //                 _ => {
-    //                     log_i!("Unknown mouse button pressed.");
-    //                     Mouse::Left
-    //                 }
-    //             };
-    //             return Some(EventType::Button {
-    //                 button: Button::Mouse(m),
-    //                 action: event::ButtonAction::Press,
-    //             });
-    //         }
-    //         xproto::BUTTON_RELEASE => {
-    //             let release: &mut xcb::ButtonReleaseEvent = unsafe { transmute(e) };
-    //             let m: xcb::ButtonIndex = unsafe { transmute(release.detail as u32) };
-    //             let m = match m {
-    //                 xcb::ButtonIndex::_Index1 => Mouse::Left,
-    //                 xcb::ButtonIndex::_Index2 => Mouse::Middle,
-    //                 xcb::ButtonIndex::_Index3 => Mouse::Right,
-    //                 _ => {
-    //                     log_e!("Unknown mouse button pressed.");
-    //                     Mouse::Left
-    //                 }
-    //             };
-    //             return Some(EventType::Button {
-    //                 button: Button::Mouse(m),
-    //                 action: event::ButtonAction::Release,
-    //             });
-    //         }
-    //         a @ xproto::KEY_PRESS | a @ xproto::KEY_RELEASE => {
-    //             let key_event: &xcb::KeyReleaseEvent = unsafe { transmute(e) };
-    //             let b = Button::Keyboard(match key_event.detail {
-    //                 xproto::KEY_W => Keyboard::W,
-    //                 xproto::KEY_S => Keyboard::S,
-    //                 xproto::KEY_A => Keyboard::A,
-    //                 xproto::KEY_D => Keyboard::D,
-    //                 // xproto::KEY_P => { Keyboard::P },
-    //                 xproto::KEY_F1 => Keyboard::Function(1),
-    //                 k @ _ => {
-    //                     log_i!("Unknown key: {:?} presse", k);
-    //                     Keyboard::W
-    //                 }
-    //             });
-    //             return Some(if a == xproto::KEY_RELEASE {
-    //                 EventType::Button {
-    //                     button: b,
-    //                     action: event::ButtonAction::Release,
-    //                 }
-    //             } else {
-    //                 EventType::Button {
-    //                     button: b,
-    //                     action: event::ButtonAction::Press,
-    //                 }
-    //             });
-    //         }
-    //         xproto::DESTROY_NOTIFY => {
-    //             return Some(EventType::Quit);
-    //         }
-    //         xproto::CONFIGURE_NOTIFY => {
-    //             let cfg_event: &xcb::ConfigureNotifyEvent = unsafe { transmute(e) };
-    //             // if cfg_event.width as Real != self.window_aspects.0 ||
-    //             //     cfg_event.height as Real != self.window_aspects.1
-    //             // {
-    //             if cfg_event.width > 0 && cfg_event.height > 0 {
-    //                 return Some(EventType::Window(Window::SizeChange {
-    //                     w: cfg_event.width as Real,
-    //                     h: cfg_event.height as Real,
-    //                     ratio: (cfg_event.width as Real) / (cfg_event.height as Real),
-    //                     pre_w: 0.0,
-    //                     pre_h: 0.0,
-    //                     pre_ratio: 0.0,
-    //                 }));
-    //             }
-    //             // }
-    //         }
-    //         c @ _ => {
-    //             log_i!("Uncontrolled event: {:?}", c);
-    //         }
-    //     }
-    //     return None;
-    // }
-
-    // pub fn get_window_aspect_ratio(&self) -> f32 {
-    //     self.window_aspect_ratio
-    // }
-
-    // pub(crate) fn get_window(&self) -> xcb::Window {
-    //     return self.window;
-    // }
-
-    // pub(crate) fn get_connection(&self) -> *mut xcb::Connection {
-    //     return self.connection;
-    // }
+    fn get_mouse_position(&self) -> (i64, i64) {
+        let reply: &mut xcb::QueryPointerReply = unsafe {
+            let coockie = (self.xcb_lib.query_pointer)(self.connection, self.window);
+            transmute((self.xcb_lib.query_pointer_reply)(
+                self.connection,
+                coockie,
+                null_mut(),
+            ))
+        };
+        let result = (reply.root_x as i64, reply.root_y as i64);
+        unsafe {
+            libc::free(transmute(reply));
+        }
+        result
+    }
 }
-
-// fn get_mouse_position(
-//     connection: *mut xcb::Connection,
-//     window: xcb::Window,
-//     screen: *mut xcb::Screen,
-// ) -> (Real, Real) {
-//     unsafe {
-//         let coockie = xcb_lib.query_pointer(connection, window);
-//         let reply: &mut xcb::QueryPointerReply =
-//             transmute(xcb_lib.query_pointer_reply(connection, coockie, null_mut()));
-//         let x = reply.root_x as Real / (*screen).width_in_pixels as Real;
-//         let y = reply.root_y as Real / (*screen).height_in_pixels as Real;
-//         libc::free(transmute(reply));
-//         (x, y)
-//     }
-// }
 
 unsafe impl Send for Window {}
 
 unsafe impl Sync for Window {}
+
+impl fmt::Debug for Window {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Xcb-Window")
+    }
+}

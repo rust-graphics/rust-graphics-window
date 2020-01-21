@@ -144,12 +144,12 @@ pub(crate) enum AtomEnum {
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_mode, derive(Debug))]
 pub(crate) enum ButtonIndex {
-    _IndexAny = 0,
-    _Index1 = 1,
-    _Index2 = 2,
-    _Index3 = 3,
-    _Index4 = 4,
-    _Index5 = 5,
+    IndexAny = 0,
+    Index1 = 1,
+    Index2 = 2,
+    Index3 = 3,
+    Index4 = 4,
+    Index5 = 5,
 }
 
 #[derive(Copy, Clone)]
