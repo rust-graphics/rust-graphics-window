@@ -154,9 +154,9 @@ pub(crate) enum ButtonIndex {
 
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_mode, derive(Debug))]
-pub(crate) enum Connection {}
+pub enum Connection {}
 
-pub(crate) type Window = u32;
+pub type Window = u32;
 pub(crate) type ColorMap = u32;
 pub(crate) type VisualId = u32;
 pub(crate) type Atom = u32;
@@ -522,15 +522,15 @@ pub(crate) struct Xcb {
         cookie: QueryPointerCookie,
         e: *mut *mut GenericError,
     ) -> *mut QueryPointerReply,
-    lib: Linker,
+    _lib: Linker,
 }
 
 impl Xcb {
     pub(crate) fn new() -> Self {
-        let lib = unwrap_f!(Linker::new("libxcb.so"));
+        let _lib = unwrap_f!(Linker::new("libxcb.so"));
         macro_rules! fun {
             ($f:ident) => {
-                unwrap_f!(lib.get_function(&concat!("xcb_", stringify!($f))))
+                unwrap_f!(_lib.get_function(&concat!("xcb_", stringify!($f))))
             };
         }
         Self {
@@ -548,7 +548,7 @@ impl Xcb {
             poll_for_event: fun!(poll_for_event),
             query_pointer: fun!(query_pointer),
             query_pointer_reply: fun!(query_pointer_reply),
-            lib,
+            _lib,
         }
     }
 }

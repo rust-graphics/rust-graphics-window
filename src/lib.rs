@@ -1,3 +1,4 @@
+#![feature(drain_filter)]
 extern crate bitflags;
 extern crate rust_graphics_library_loader as liblod;
 extern crate rust_graphics_log as log;

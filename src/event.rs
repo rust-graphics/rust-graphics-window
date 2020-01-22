@@ -1,6 +1,6 @@
 use log::{log_f, result_f, unwrap_f};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, LinkedList},
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc::{channel, Sender},
@@ -12,7 +12,8 @@ use std::{
 
 pub type FingerIndexType = i64;
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Mouse {
     Left,
     Right,
@@ -22,7 +23,8 @@ pub enum Mouse {
     Offic,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Keyboard {
     A,
     B,
@@ -94,13 +96,14 @@ pub enum Keyboard {
     Unknown,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Button {
     Mouse(Mouse),
     Keyboard(Keyboard),
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Window {
     SizeChange {
         width: i64,
@@ -115,7 +118,7 @@ pub enum Window {
     },
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Move {
     Mouse {
         previous: (i64, i64),
@@ -130,20 +133,20 @@ pub enum Move {
     },
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum ButtonAction {
     Press,
     Release,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum TouchAction {
     Press,
     HardPress,
     Release,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum TouchGesture {
     Tap, // todo
     Drag {
@@ -163,7 +166,7 @@ pub enum TouchGesture {
     },
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum GestureState {
     Started,
     InMiddle,
@@ -171,7 +174,7 @@ pub enum GestureState {
     Canceled,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Touch {
     Gesture {
         start_time: Instant,
@@ -186,7 +189,7 @@ pub enum Touch {
     },
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Data {
     Move(Move),
     Button {
@@ -199,7 +202,7 @@ pub enum Data {
     Terminate,
 }
 
-#[derive(Debug)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub struct Event {
     id: u64,
     time: Instant,
@@ -231,18 +234,29 @@ impl Event {
 }
 
 pub trait Listener: Send + Sync {
-    fn on_event(&mut self, event: &Event);
+    fn on_event(&mut self, event: &Event) -> bool;
+}
+
+#[derive(Default)]
+struct EngineState {
+    window_width: i64,
+    window_height: i64,
+    window_aspect_ratio: f64,
+    mouse_position_x: i64,
+    mouse_position_y: i64,
+    pressed_buttons: BTreeSet<Button>,
 }
 
 pub struct Engine {
-    listeners: Arc<Mutex<BTreeMap<i64, Vec<Weak<RwLock<dyn Listener>>>>>>,
+    listeners: Arc<Mutex<BTreeMap<i64, LinkedList<Weak<RwLock<dyn Listener>>>>>>,
     processor: Option<JoinHandle<()>>,
     sender: Sender<Event>,
+    state: Arc<Mutex<EngineState>>,
 }
 
 impl Engine {
     pub(crate) fn new() -> Self {
-        let listeners: Arc<Mutex<BTreeMap<i64, Vec<Weak<RwLock<dyn Listener>>>>>> =
+        let listeners: Arc<Mutex<BTreeMap<i64, LinkedList<Weak<RwLock<dyn Listener>>>>>> =
             Arc::new(Mutex::new(BTreeMap::new()));
         let (sender, receiver) = channel();
         let ls = listeners.clone();
@@ -253,21 +267,93 @@ impl Engine {
                 _ => (),
             }
             let listeners = result_f!(ls.lock());
-            for (_, ls) in &*listeners {
+            'event_finder_loop: for (_, ls) in &*listeners {
                 for l in ls {
-                    result_f!(unwrap_f!(l.upgrade()).write()).on_event(&e);
+                    if let Some(l) = l.upgrade() {
+                        if result_f!(l.write()).on_event(&e) {
+                            break 'event_finder_loop;
+                        }
+                    }
                 }
             }
         }));
+        let state = Arc::new(Mutex::new(EngineState::default()));
         Self {
             listeners,
             processor,
             sender,
+            state,
         }
     }
 
+    pub(crate) fn broadcast(&self, e: Event) {
+        result_f!(self.sender.send(e));
+    }
+
     pub fn add(&self, priority: i64, l: Weak<RwLock<dyn Listener>>) {
-        unwrap_f!((*result_f!(self.listeners.lock())).get_mut(&priority)).push(l);
+        (*result_f!(self.listeners.lock()))
+            .entry(priority)
+            .or_insert(LinkedList::new())
+            .push_back(l);
+    }
+
+    pub fn clean(&self) {
+        let mut listeners = result_f!(self.listeners.lock());
+        for (_, listeners) in &mut *listeners {
+            listeners.drain_filter(|x| x.strong_count() <= 0);
+        }
+    }
+
+    pub(crate) fn init_window_aspects(&self, width: i64, height: i64) {
+        let mut state = result_f!(self.state.lock());
+        state.window_width = width;
+        state.window_height = height;
+        state.window_aspect_ratio = width as f64 / height as f64;
+    }
+
+    pub(crate) fn init_mouse_position(&self, p: (i64, i64)) {
+        let mut state = result_f!(self.state.lock());
+        state.mouse_position_x = p.0;
+        state.mouse_position_y = p.1;
+    }
+
+    pub(crate) fn set_mouse_position(&self, cur: (i64, i64)) {
+        self.broadcast(Event::new({
+            let mut state = result_f!(self.state.lock());
+            let d = Data::Move(Move::Mouse {
+                previous: (state.mouse_position_x, state.mouse_position_y),
+                current: cur,
+                delta: (
+                    cur.0 - state.mouse_position_x,
+                    cur.1 - state.mouse_position_y,
+                ),
+            });
+            state.mouse_position_x = cur.0;
+            state.mouse_position_y = cur.1;
+            d
+        }));
+    }
+
+    pub(crate) fn button_pressed(&self, b: Button) {
+        self.broadcast(Event::new({
+            let mut state = result_f!(self.state.lock());
+            state.pressed_buttons.insert(b.clone());
+            Data::Button {
+                button: b,
+                action: ButtonAction::Press,
+            }
+        }));
+    }
+
+    pub(crate) fn button_released(&self, b: Button) {
+        self.broadcast(Event::new({
+            let mut state = result_f!(self.state.lock());
+            state.pressed_buttons.remove(&b);
+            Data::Button {
+                button: b,
+                action: ButtonAction::Press,
+            }
+        }));
     }
 }
 
