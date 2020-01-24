@@ -6,6 +6,7 @@ pub(super) const BUTTON_RELEASE: c_uint = 5;
 pub(super) const MOTION_NOTIFY: c_uint = 6;
 pub(super) const DESTROY_NOTIFY: c_uint = 17;
 pub(super) const CONFIGURE_NOTIFY: c_uint = 22;
+pub(super) const RESIZE_REQUEST: c_uint = 25;
 pub(super) const CLIENT_MESSAGE: c_uint = 33;
 pub(super) const KEY_A: u8 = 38;
 pub(super) const KEY_B: u8 = 56;

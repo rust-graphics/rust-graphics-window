@@ -164,23 +164,16 @@ impl Window {
                 self.event_engine
                     .button_released(Self::translate_key_button(release.detail));
             }
-            // xproto::CONFIGURE_NOTIFY => {
-            //     let cfg_event: &xcb::ConfigureNotifyEvent = unsafe { transmute(e) };
-            //     // if cfg_event.width as Real != self.window_aspects.0 ||
-            //     //     cfg_event.height as Real != self.window_aspects.1
-            //     // {
-            //     if cfg_event.width > 0 && cfg_event.height > 0 {
-            //         return Some(EventType::Window(Window::SizeChange {
-            //             w: cfg_event.width as Real,
-            //             h: cfg_event.height as Real,
-            //             ratio: (cfg_event.width as Real) / (cfg_event.height as Real),
-            //             pre_w: 0.0,
-            //             pre_h: 0.0,
-            //             pre_ratio: 0.0,
-            //         }));
-            //     }
-            //     // }
-            // }
+            xproto::CONFIGURE_NOTIFY => {
+                let e: &xcb::ConfigureNotifyEvent = unsafe { transmute(e) };
+                self.event_engine
+                    .window_size_changed(e.width as i64, e.height as i64);
+            }
+            xproto::RESIZE_REQUEST => {
+                let e: &xcb::ResizeRequestEvent = unsafe { transmute(e) };
+                self.event_engine
+                    .window_size_changed(e.width as i64, e.height as i64);
+            }
             c @ _ => {
                 log_i!("Uncontrolled event: {:?}", c);
             }
@@ -190,9 +183,9 @@ impl Window {
     fn translate_mouse_button(i: u8) -> Button {
         let b: xcb::ButtonIndex = unsafe { transmute(i as u32) };
         Button::Mouse(match b {
-            xcb::ButtonIndex::_Index1 => Mouse::Left,
-            xcb::ButtonIndex::_Index2 => Mouse::Middle,
-            xcb::ButtonIndex::_Index3 => Mouse::Right,
+            xcb::ButtonIndex::Index1 => Mouse::Left,
+            xcb::ButtonIndex::Index2 => Mouse::Middle,
+            xcb::ButtonIndex::Index3 => Mouse::Right,
             _ => {
                 log_e!("Unexpected mouse button: {}", i);
                 Mouse::Unknown(i as u32)

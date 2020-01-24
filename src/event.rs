@@ -1,6 +1,6 @@
 #[cfg(feature = "verbose_log")]
 use log::log_i;
-use log::{log_f, result_f};
+use log::{log_f, result_f, unwrap_f};
 use std::{
     collections::{BTreeMap, BTreeSet, LinkedList},
     sync::{
@@ -107,19 +107,18 @@ pub enum Button {
     Keyboard(Keyboard),
 }
 
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
+pub struct WindowSizeChange {
+    pub current: WindowAspects,
+    pub previous: WindowAspects,
+    pub delta: WindowAspects,
+}
+
+#[derive(Clone)]
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Window {
-    SizeChange {
-        width: i64,
-        height: i64,
-        ratio: f64,
-        previous_width: i64,
-        previous_height: i64,
-        previous_ratio: f64,
-        delta_width: i64,
-        delta_height: i64,
-        delta_ratio: f64,
-    },
+    SizeChange(WindowSizeChange),
 }
 
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
@@ -241,11 +240,23 @@ pub trait Listener: Send + Sync {
     fn on_event(&mut self, event: &Event) -> bool;
 }
 
+#[derive(Default, Clone, Copy)]
+#[cfg_attr(feature = "debug_derive", derive(Debug))]
+pub struct WindowAspects {
+    width: i64,
+    height: i64,
+    ratio: f64,
+}
+
+#[derive(Default)]
+struct WindowState {
+    aspects: WindowAspects,
+    changing_aspects: Option<WindowAspects>,
+}
+
 #[derive(Default)]
 struct EngineState {
-    window_width: i64,
-    window_height: i64,
-    window_aspect_ratio: f64,
+    window: WindowState,
     mouse_position_x: i64,
     mouse_position_y: i64,
     pressed_buttons: BTreeSet<Button>,
@@ -264,18 +275,49 @@ impl Engine {
             Arc::new(Mutex::new(BTreeMap::new()));
         let (sender, receiver) = channel();
         let ls = listeners.clone();
-        let processor = Some(spawn(move || loop {
-            let e: Event = result_f!(receiver.recv());
-            match e.get_data() {
-                &Data::Terminate => return,
-                _ => (),
-            }
-            let listeners = result_f!(ls.lock());
-            'event_finder_loop: for (_, ls) in &*listeners {
-                for l in ls {
-                    if let Some(l) = l.upgrade() {
-                        if result_f!(l.write()).on_event(&e) {
-                            break 'event_finder_loop;
+        let processor = Some(spawn(move || {
+            let mut pending_window_resize: Option<WindowSizeChange> = None;
+            'engine_loop: loop {
+                let e: Option<Event> = match receiver.recv_timeout(Duration::from_millis(100)) {
+                    Ok(e) => Some(e),
+                    Err(_) => None,
+                };
+                let e: Event = if let Some(e) = e {
+                    match e.get_data() {
+                        &Data::Terminate => return,
+                        &Data::Window(Window::SizeChange(ref e)) => {
+                            if pending_window_resize.is_some() {
+                                let p = unwrap_f!(pending_window_resize.as_mut());
+                                p.current = e.current.clone();
+                                p.delta = WindowAspects {
+                                    width: p.current.width - p.previous.width,
+                                    height: p.current.height - p.previous.height,
+                                    ratio: p.current.ratio - p.previous.ratio,
+                                };
+                            } else {
+                                pending_window_resize = Some(e.clone());
+                            }
+                            continue 'engine_loop;
+                        }
+                        _ => (),
+                    }
+                    e
+                } else if pending_window_resize.is_some() {
+                    let e = Event::new(Data::Window(Window::SizeChange(unwrap_f!(
+                        pending_window_resize.clone()
+                    ))));
+                    pending_window_resize = None;
+                    e
+                } else {
+                    continue 'engine_loop;
+                };
+                let listeners = result_f!(ls.lock());
+                'listeners_loop: for (_, ls) in &*listeners {
+                    for l in ls {
+                        if let Some(l) = l.upgrade() {
+                            if result_f!(l.write()).on_event(&e) {
+                                break 'listeners_loop;
+                            }
                         }
                     }
                 }
@@ -310,9 +352,9 @@ impl Engine {
 
     pub(crate) fn init_window_aspects(&self, width: i64, height: i64) {
         let mut state = result_f!(self.state.lock());
-        state.window_width = width;
-        state.window_height = height;
-        state.window_aspect_ratio = width as f64 / height as f64;
+        state.window.aspects.width = width;
+        state.window.aspects.height = height;
+        state.window.aspects.ratio = width as f64 / height as f64;
     }
 
     pub(crate) fn init_mouse_position(&self, p: (i64, i64)) {
@@ -358,6 +400,46 @@ impl Engine {
                 action: ButtonAction::Release,
             }
         }));
+    }
+
+    pub(crate) fn window_size_changed(&self, width: i64, height: i64) {
+        if width <= 0 || height <= 0 {
+            return;
+        }
+        self.broadcast(Event::new(Data::Window({
+            let mut state = result_f!(self.state.lock());
+            if width == state.window.aspects.width && height == state.window.aspects.height {
+                return;
+            }
+            let ratio = width as f64 / height as f64;
+            state.window.changing_aspects = Some(WindowAspects {
+                width,
+                height,
+                ratio,
+            });
+            let d = Window::SizeChange(WindowSizeChange {
+                current: WindowAspects {
+                    width,
+                    height,
+                    ratio,
+                },
+                previous: WindowAspects {
+                    width: state.window.aspects.width,
+                    height: state.window.aspects.height,
+                    ratio: state.window.aspects.ratio,
+                },
+                delta: WindowAspects {
+                    width: width - state.window.aspects.width,
+                    height: height - state.window.aspects.height,
+                    ratio: ratio - state.window.aspects.ratio,
+                },
+            });
+            state.window.aspects.width = width;
+            state.window.aspects.height = height;
+            state.window.aspects.ratio = ratio;
+            state.window.changing_aspects = None;
+            d
+        })));
     }
 }
 

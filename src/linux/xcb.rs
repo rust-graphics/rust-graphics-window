@@ -142,9 +142,9 @@ pub(crate) enum AtomEnum {
 #[repr(u32)]
 pub(crate) enum ButtonIndex {
     _IndexAny = 0,
-    _Index1 = 1,
-    _Index2 = 2,
-    _Index3 = 3,
+    Index1 = 1,
+    Index2 = 2,
+    Index3 = 3,
     _Index4 = 4,
     _Index5 = 5,
 }
@@ -351,8 +351,6 @@ impl Default for ClientMessageData {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
-#[cfg_attr(debug_mode, derive(Debug))]
 pub(crate) struct ButtonPressEvent {
     pub(crate) response_type: u8,
     pub(crate) detail: Button,
@@ -370,15 +368,7 @@ pub(crate) struct ButtonPressEvent {
     pub(crate) pad0: u8,
 }
 
-impl Default for ButtonPressEvent {
-    fn default() -> Self {
-        unsafe { zeroed() }
-    }
-}
-
 #[repr(C)]
-#[derive(Copy, Clone)]
-#[cfg_attr(debug_mode, derive(Debug))]
 pub(crate) struct KeyPressEvent {
     pub(crate) response_type: u8,
     pub(crate) detail: KeyCode,
@@ -396,15 +386,7 @@ pub(crate) struct KeyPressEvent {
     pub(crate) pad0: u8,
 }
 
-impl Default for KeyPressEvent {
-    fn default() -> Self {
-        unsafe { zeroed() }
-    }
-}
-
 #[repr(C)]
-#[derive(Copy, Clone)]
-#[cfg_attr(debug_mode, derive(Debug))]
 pub(crate) struct ConfigureNotifyEvent {
     pub(crate) response_type: u8,
     pub(crate) pad0: u8,
@@ -421,10 +403,14 @@ pub(crate) struct ConfigureNotifyEvent {
     pub(crate) pad1: u8,
 }
 
-impl Default for ConfigureNotifyEvent {
-    fn default() -> Self {
-        unsafe { zeroed() }
-    }
+#[repr(C)]
+pub(crate) struct ResizeRequestEvent {
+    pub(crate) response_type: u8,
+    pub(crate) pad0: u8,
+    pub(crate) sequence: u16,
+    pub(crate) window: Window,
+    pub(crate) width: u16,
+    pub(crate) height: u16,
 }
 
 #[repr(C)]
