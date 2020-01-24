@@ -1,7 +1,6 @@
 use bitflags::bitflags;
 use liblod::Linker;
 use log::{log_f, unwrap_f};
-use std::fmt;
 use std::mem::zeroed;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 
@@ -141,15 +140,13 @@ pub(crate) enum AtomEnum {
 }
 
 #[repr(u32)]
-#[derive(Copy, Clone)]
-#[cfg_attr(debug_mode, derive(Debug))]
 pub(crate) enum ButtonIndex {
-    IndexAny = 0,
-    Index1 = 1,
-    Index2 = 2,
-    Index3 = 3,
-    Index4 = 4,
-    Index5 = 5,
+    _IndexAny = 0,
+    _Index1 = 1,
+    _Index2 = 2,
+    _Index3 = 3,
+    _Index4 = 4,
+    _Index5 = 5,
 }
 
 #[derive(Copy, Clone)]
@@ -169,7 +166,7 @@ pub(crate) type KeyReleaseEvent = KeyPressEvent;
 #[repr(C)]
 #[derive(Copy, Clone)]
 #[cfg_attr(debug_mode, derive(Debug))]
-pub(crate) struct Screen {
+pub struct Screen {
     pub(crate) root: Window,
     pub(crate) default_colormap: ColorMap,
     pub(crate) white_pixel: u32,
@@ -522,6 +519,8 @@ pub(crate) struct Xcb {
         cookie: QueryPointerCookie,
         e: *mut *mut GenericError,
     ) -> *mut QueryPointerReply,
+    pub(crate) destroy_window: extern "C" fn(*mut Connection, Window) -> VoidCookie,
+    pub(crate) disconnect: extern "C" fn(*mut Connection),
     _lib: Linker,
 }
 
@@ -548,13 +547,16 @@ impl Xcb {
             poll_for_event: fun!(poll_for_event),
             query_pointer: fun!(query_pointer),
             query_pointer_reply: fun!(query_pointer_reply),
+            destroy_window: fun!(destroy_window),
+            disconnect: fun!(disconnect),
             _lib,
         }
     }
 }
 
-impl fmt::Debug for Xcb {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(feature = "debug_derive")]
+impl std::fmt::Debug for Xcb {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Xcb-Library")
     }
 }

@@ -18,3 +18,4 @@ rust_graphics_log = "0.1"
 
 [features]
 debug_derive = []
+verbose_log = []

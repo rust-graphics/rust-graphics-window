@@ -12,9 +12,9 @@ impl window::event::Listener for Listener {
     fn on_event(&mut self, event: &window::event::Event) -> bool {
         match event.get_data() {
             &window::event::Data::Quit => self.running = false,
-            e @ _ => {
-                #[cfg_attr(feature = "debug_derive", derive(Debug))]
-                log_i!("{:?}", e);
+            _e @ _ => {
+                #[cfg(feature = "debug_derive")]
+                log_i!("{:?}", _e);
             }
         }
         return false;
@@ -29,4 +29,5 @@ fn main() {
     while { result_f!(listener.read()).running } {
         w.fetch_events();
     }
+    log_i!("Program ended.");
 }

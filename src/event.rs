@@ -1,4 +1,6 @@
-use log::{log_f, result_f, unwrap_f};
+#[cfg(feature = "verbose_log")]
+use log::log_i;
+use log::{log_f, result_f};
 use std::{
     collections::{BTreeMap, BTreeSet, LinkedList},
     sync::{
@@ -21,6 +23,7 @@ pub enum Mouse {
     Back,
     Forward,
     Offic,
+    Unknown(u32),
 }
 
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
@@ -72,16 +75,16 @@ pub enum Keyboard {
     Plus(u8),
     Minus(u8),
     Enter(u8),
-    Period(u8),
+    Dot(u8),
     Tab,
-    SquareBracketLeft,
-    SquareBracketRight,
-    CapseLock,
+    BracketLeft,
+    BracketRight,
+    CapseLock(u8),
     SemiColon,
-    Quotem,
+    Quote,
     BackSlash(u8),
     Shift(u8),
-    Comma,
+    Comma(u8),
     Control(u8),
     Alt(u8),
     Space(u8),
@@ -93,7 +96,8 @@ pub enum Keyboard {
     ArrowLeft,
     ArrowRight,
     Equal,
-    Unknown,
+    Menu(u8),
+    Unknown(u32),
 }
 
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
@@ -351,7 +355,7 @@ impl Engine {
             state.pressed_buttons.remove(&b);
             Data::Button {
                 button: b,
-                action: ButtonAction::Press,
+                action: ButtonAction::Release,
             }
         }));
     }
@@ -359,8 +363,11 @@ impl Engine {
 
 impl Drop for Engine {
     fn drop(&mut self) {
+        result_f!(self.sender.send(Event::new(Data::Terminate)));
         if let Some(processor) = self.processor.take() {
             result_f!(processor.join());
         }
+        #[cfg(feature = "verbose_log")]
+        log_i!("Rust-Graphics's Window library's Event Engine droped.");
     }
 }

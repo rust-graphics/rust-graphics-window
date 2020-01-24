@@ -2,17 +2,14 @@ use super::super::event::*;
 use super::xcb;
 use super::xproto;
 
-use log::{log_e, log_f, log_i, result_f, unwrap_f};
+use log::{log_e, log_f, log_i};
 use std::{
     ffi::CString,
-    fmt,
     mem::transmute,
     os::raw::{c_int, c_uint},
     ptr::null_mut,
-    sync::{Arc, RwLock},
 };
 
-#[cfg_attr(feature = "debug_drive", derive(Debug))]
 pub struct Window {
     xcb_lib: xcb::Xcb,
     connection: *mut xcb::Connection,
@@ -150,16 +147,12 @@ impl Window {
             xproto::BUTTON_PRESS => {
                 let press: &xcb::ButtonPressEvent = unsafe { transmute(e) };
                 self.event_engine
-                    .button_pressed(Self::translate_mouse_button(unsafe {
-                        transmute(press.detail as u32)
-                    }));
+                    .button_pressed(Self::translate_mouse_button(press.detail));
             }
             xproto::BUTTON_RELEASE => {
                 let release: &xcb::ButtonReleaseEvent = unsafe { transmute(e) };
                 self.event_engine
-                    .button_pressed(Self::translate_mouse_button(unsafe {
-                        transmute(release.detail as u32)
-                    }));
+                    .button_released(Self::translate_mouse_button(release.detail));
             }
             xproto::KEY_PRESS => {
                 let press: &xcb::KeyPressEvent = unsafe { transmute(e) };
@@ -194,12 +187,16 @@ impl Window {
         }
     }
 
-    fn translate_mouse_button(i: xcb::ButtonIndex) -> Button {
-        Button::Mouse(match i {
-            xcb::ButtonIndex::Index1 => Mouse::Left,
-            xcb::ButtonIndex::Index2 => Mouse::Middle,
-            xcb::ButtonIndex::Index3 => Mouse::Right,
-            i @ _ => log_f!("Unexpected mouse button: {}", i as u32),
+    fn translate_mouse_button(i: u8) -> Button {
+        let b: xcb::ButtonIndex = unsafe { transmute(i as u32) };
+        Button::Mouse(match b {
+            xcb::ButtonIndex::_Index1 => Mouse::Left,
+            xcb::ButtonIndex::_Index2 => Mouse::Middle,
+            xcb::ButtonIndex::_Index3 => Mouse::Right,
+            _ => {
+                log_e!("Unexpected mouse button: {}", i);
+                Mouse::Unknown(i as u32)
+            }
         })
     }
 
@@ -243,7 +240,132 @@ impl Window {
             xproto::KEY_F10 => Keyboard::Function(10),
             xproto::KEY_F11 => Keyboard::Function(11),
             xproto::KEY_F12 => Keyboard::Function(12),
-            k @ _ => log_f!("Unknown key: {:?} presse", k),
+            xproto::KEY_ENTER_0 => Keyboard::Enter(0),
+            xproto::KEY_ENTER_1 => Keyboard::Enter(1),
+            xproto::KEY_CTRL_0 => Keyboard::Control(0),
+            xproto::KEY_CTRL_1 => Keyboard::Control(1),
+            xproto::KEY_ALT_0 => Keyboard::Alt(0),
+            xproto::KEY_ALT_1 => Keyboard::Alt(1),
+            xproto::KEY_SHIFT_0 => Keyboard::Shift(0),
+            xproto::KEY_SHIFT_1 => Keyboard::Shift(1),
+            xproto::KEY_ESCAPE_0 => Keyboard::Escape(0),
+            xproto::KEY_SPACE_0 => Keyboard::Space(0),
+            xproto::KEY_MENU_0 => Keyboard::Menu(0),
+            xproto::KEY_DOT_0 => Keyboard::Dot(0),
+            xproto::KEY_DOT_1 => Keyboard::Dot(1),
+            xproto::KEY_COMMA_0 => Keyboard::Comma(0),
+            xproto::KEY_SLASH_0 => Keyboard::Slash(0),
+            xproto::KEY_SLASH_1 => Keyboard::Slash(1),
+            xproto::KEY_CAPS_LOCK_0 => Keyboard::CapseLock(0),
+            xproto::KEY_SEMICOLON => Keyboard::SemiColon,
+            xproto::KEY_QUOTE => Keyboard::Quote,
+            xproto::KEY_TAB_0 => Keyboard::Tab,
+            xproto::KEY_LEFT_BRACKET => Keyboard::BracketLeft,
+            xproto::KEY_RIGHT_BRACKET => Keyboard::BracketRight,
+            xproto::KEY_BACK_SLASH => Keyboard::BackSlash(0),
+            xproto::KEY_BACK_QUOTE => Keyboard::BackQuote,
+            xproto::KEY_MINUS_0 => Keyboard::Minus(0),
+            xproto::KEY_MINUS_1 => Keyboard::Minus(1),
+            xproto::KEY_EQUAL_0 => Keyboard::Equal,
+            xproto::KEY_BACKSPACE_0 => Keyboard::Backspace,
+            xproto::KEY_PAUSE_BREAK_0 => Keyboard::PauseBreak,
+            xproto::KEY_PRINT_SCREEN_0 => Keyboard::PrintScreen,
+            xproto::KEY_DELETE_0 => Keyboard::Delete,
+            xproto::KEY_HOME_0 => Keyboard::Home,
+            xproto::KEY_PAGE_UP_0 => Keyboard::PageUp,
+            xproto::KEY_PAGE_DOWN_0 => Keyboard::PageDown,
+            xproto::KEY_END_0 => Keyboard::End,
+            xproto::KEY_NUMLOCK_0 => Keyboard::NumLock,
+            xproto::KEY_STAR_0 => Keyboard::Star,
+            xproto::KEY_PLUS_0 => Keyboard::Plus(0),
+            xproto::KEY_ARROW_UP => Keyboard::ArrowUp,
+            xproto::KEY_ARROW_DOWN => Keyboard::ArrowDown,
+            xproto::KEY_ARROW_LEFT => Keyboard::ArrowLeft,
+            xproto::KEY_ARROW_RIGHT => Keyboard::ArrowRight,
+            xproto::KEY_NUM_0 => Keyboard::Number {
+                number: 0,
+                padd: false,
+            },
+            xproto::KEY_NUM_1 => Keyboard::Number {
+                number: 1,
+                padd: false,
+            },
+            xproto::KEY_NUM_2 => Keyboard::Number {
+                number: 2,
+                padd: false,
+            },
+            xproto::KEY_NUM_3 => Keyboard::Number {
+                number: 3,
+                padd: false,
+            },
+            xproto::KEY_NUM_4 => Keyboard::Number {
+                number: 4,
+                padd: false,
+            },
+            xproto::KEY_NUM_5 => Keyboard::Number {
+                number: 5,
+                padd: false,
+            },
+            xproto::KEY_NUM_6 => Keyboard::Number {
+                number: 6,
+                padd: false,
+            },
+            xproto::KEY_NUM_7 => Keyboard::Number {
+                number: 7,
+                padd: false,
+            },
+            xproto::KEY_NUM_8 => Keyboard::Number {
+                number: 8,
+                padd: false,
+            },
+            xproto::KEY_NUM_9 => Keyboard::Number {
+                number: 9,
+                padd: false,
+            },
+            xproto::KEY_NUM_PAD_0 => Keyboard::Number {
+                number: 0,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_1 => Keyboard::Number {
+                number: 1,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_2 => Keyboard::Number {
+                number: 2,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_3 => Keyboard::Number {
+                number: 3,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_4 => Keyboard::Number {
+                number: 4,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_5 => Keyboard::Number {
+                number: 5,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_6 => Keyboard::Number {
+                number: 6,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_7 => Keyboard::Number {
+                number: 7,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_8 => Keyboard::Number {
+                number: 8,
+                padd: true,
+            },
+            xproto::KEY_NUM_PAD_9 => Keyboard::Number {
+                number: 9,
+                padd: true,
+            },
+            k @ _ => {
+                log_e!("Unknown key: {:?} presse", k);
+                Keyboard::Unknown(k as u32)
+            }
         })
     }
 
@@ -253,6 +375,10 @@ impl Window {
 
     pub fn get_connection(&self) -> *mut xcb::Connection {
         return self.connection;
+    }
+
+    pub fn get_screen(&self) -> *mut xcb::Screen {
+        return self.screen;
     }
 
     fn get_mouse_position(&self) -> (i64, i64) {
@@ -280,8 +406,18 @@ unsafe impl Send for Window {}
 
 unsafe impl Sync for Window {}
 
-impl fmt::Debug for Window {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[cfg(feature = "debug_derive")]
+impl std::fmt::Debug for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Xcb-Window")
+    }
+}
+
+impl Drop for Window {
+    fn drop(&mut self) {
+        (self.xcb_lib.destroy_window)(self.connection, self.window);
+        (self.xcb_lib.disconnect)(self.connection);
+        #[cfg(feature = "verbose_log")]
+        log_i!("Rust-Graphics's Window droped.");
     }
 }
