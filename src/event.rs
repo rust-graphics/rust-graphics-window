@@ -1,6 +1,6 @@
 #[cfg(feature = "verbose_log")]
 use log::log_i;
-use log::{log_f, result_f, unwrap_f};
+use log::{result_f, unwrap_f};
 use std::{
     collections::{BTreeMap, BTreeSet, LinkedList},
     sync::{

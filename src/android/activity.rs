@@ -1,8 +1,8 @@
 #[repr(C)]
 pub(crate) struct ANativeActivity {
     pub callbacks: &'static mut ANativeActivityCallbacks,
-    pub vm: *mut JavaVM,
-    pub env: *mut JNIEnv,
+    pub vm: &'static mut JavaVM,
+    pub env: &'static mut JNIEnv,
     pub class: jobject,
     pub internalDataPath: *const c_char,
     pub externalDataPath: *const c_char,

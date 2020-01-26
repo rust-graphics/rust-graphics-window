@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 use liblod::Linker;
-use log::{log_f, unwrap_f};
+use log::unwrap_f;
 use std::mem::zeroed;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 

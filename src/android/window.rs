@@ -1,15 +1,18 @@
-use super::super::event::*;
-use super::file::AASSET_MANAGER;
-use super::glue::{AndroidApp, AndroidPollSource, AppCmd};
-use super::input;
-use super::looper::ALooper_pollAll;
-use super::window;
-use std::mem::transmute;
-use std::ptr::null_mut;
-use std::sync::{Arc, RwLock};
+use {
+    super::{
+        // super::event::*,
+        glue::{AndroidApp, AndroidPollSource, AppCmd},
+        input,
+        looper::ALooper_pollAll,
+        window,
+    },
+    std::mem::transmute,
+    std::ptr::null_mut,
+    std::sync::{Arc, RwLock},
+};
 
 pub struct Window {
-    pub and_app: &'static mut AndroidApp,
+    pub android_app: &'static mut AndroidApp,
     event_engine: Engine,
 }
 
@@ -21,11 +24,7 @@ impl std::fmt::Debug for Window {
 }
 
 impl Window {
-    pub fn new(
-        activity: *mut activity::ANativeActivity,
-        saved_state: *mut libc::c_void,
-        saved_state_size: libc::size_t,
-    ) -> Self {
+    pub fn new(android_app: *mut c_void) -> Self {
         unsafe {
             (*and_app).on_app_cmd = handle_cmd;
             (*and_app).on_input_event = handle_input;
@@ -56,7 +55,7 @@ impl Window {
                 }
             }
         }
-        vxloge!("Unexpected flow.");
+        log_e!("Unexpected flow.");
     }
 
     pub fn set_renderer(&mut self, renderer: Arc<RwLock<RenderEngine>>) {
@@ -73,14 +72,14 @@ impl Window {
     fn handle_cmd(&self, cmd: i32) {
         match unsafe { transmute::<i8, AppCmd>(cmd as i8) } {
             AppCmd::InitWindow => {
-                vxlogi!("Window has been shown!");
+                log_i!("Window has been shown!");
             }
             AppCmd::TermWindow => {
-                vxlogi!("Window has been terminated!");
+                log_i!("Window has been terminated!");
             }
             c @ _ => {
                 let _ = c;
-                vxlogi!("event {:?} not handled.", c);
+                log_i!("event {:?} not handled.", c);
             }
         }
     }
@@ -208,9 +207,57 @@ extern "C" fn handle_input(android_app: *mut AndroidApp, event: *mut input::AInp
 
 impl Drop for Window {
     fn drop(&mut self) {
-        vxloge!(
+        log_e!(
             "Error unexpected deletion of Os Window this is a \
              TODO I will decide later how to do finall termination."
         );
     }
+}
+
+use super::rect::ARect;
+
+#[repr(u32)]
+pub enum WindowFormat {
+    Rgba8888 = 1,
+    Rgbx8888 = 2,
+    Rgb565 = 4,
+}
+
+pub type ANativeWindow = c_void;
+
+#[repr(C)]
+pub struct ANativeWindowBuffer {
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub format: i32,
+    pub bits: *mut c_void,
+    pub reserved: [u32; 6usize],
+}
+
+impl Default for ANativeWindowBuffer {
+    fn default() -> Self {
+        unsafe { zeroed() }
+    }
+}
+
+#[cfg_attr(target_os = "android", link(name = "android", kind = "dylib"))]
+extern "C" {
+    pub fn ANativeWindow_acquire(window: *mut ANativeWindow);
+    pub fn ANativeWindow_release(window: *mut ANativeWindow);
+    pub fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
+    pub fn ANativeWindow_getHeight(window: *mut ANativeWindow) -> i32;
+    pub fn ANativeWindow_getFormat(window: *mut ANativeWindow) -> i32;
+    pub fn ANativeWindow_setBuffersGeometry(
+        window: *mut ANativeWindow,
+        width: i32,
+        height: i32,
+        format: i32,
+    ) -> i32;
+    pub fn ANativeWindow_lock(
+        window: *mut ANativeWindow,
+        out_buffer: *mut ANativeWindowBuffer,
+        in_out_dirty_bounds: *mut ARect,
+    ) -> i32;
+    pub fn ANativeWindow_unlockAndPost(window: *mut ANativeWindow) -> i32;
 }

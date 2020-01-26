@@ -1,7 +1,9 @@
+#![feature(thread_id_value)]
+
 extern crate rust_graphics_log as log;
 extern crate rust_graphics_window as window;
 
-use log::{log_f, log_i, result_f};
+use log::{log_i, result_f};
 use std::sync::{Arc, RwLock};
 
 struct Listener {
