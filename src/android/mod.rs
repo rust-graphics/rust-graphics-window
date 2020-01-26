@@ -1,3 +1,5 @@
+extern crate rust_graphics_jni as jni;
+
 pub(crate) mod activity;
 pub(crate) mod asset;
 pub(crate) mod config;

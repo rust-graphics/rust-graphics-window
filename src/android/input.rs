@@ -2,14 +2,14 @@ use std::os::raw::{c_int, c_void};
 
 use super::looper::{ALooper, ALooperCallbackFunc};
 
-#[repr(i32)]
-#[derive(Debug, Copy, Clone)]
-pub enum AKeyState {
-    Unknown = -1,
-    Up = 0,
-    Down = 1,
-    Virtual = 2,
-}
+// #[repr(i32)]
+// pub enum AKeyState {
+//     Unknown = -1,
+//     Up = 0,
+//     Down = 1,
+//     Virtual = 2,
+// }
+
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
 pub enum AMeta {

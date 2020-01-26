@@ -414,3 +414,10 @@ impl Drop for Window {
         log_i!("Rust-Graphics's Window droped.");
     }
 }
+
+#[macro_export]
+macro_rules! create_window {
+    () => {
+        crate::window::Window::new()
+    };
+}

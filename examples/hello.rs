@@ -1,5 +1,3 @@
-#![feature(thread_id_value)]
-
 extern crate rust_graphics_log as log;
 extern crate rust_graphics_window as window;
 
@@ -24,7 +22,7 @@ impl window::event::Listener for Listener {
 }
 
 fn main() {
-    let w = window::Window::new();
+    let w = window::create_window!();
     let listener = Arc::new(RwLock::new(Listener { running: true }));
     let l: Arc<RwLock<dyn window::event::Listener>> = listener.clone();
     w.get_engine().add(0, Arc::downgrade(&l));
