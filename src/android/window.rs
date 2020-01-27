@@ -1,15 +1,25 @@
 use {
-    super::{super::event::Engine as EventEngine, glue::AndroidApp},
+    super::{
+        super::event::{Engine as EventEngine, FingerIndexType},
+        android::{
+            glue::{AndroidApp, AndroidPollSource, AppCmd},
+            input,
+            looper::ALooper_pollAll,
+            window,
+        },
+    },
+    log::{log_i, result_f, unexpected_f, unimplemented_f},
     std::{
-        mem::transmute,
-        os::raw::{c_char, c_void},
+        mem::{transmute, transmute_copy},
+        os::raw::c_int,
         ptr::null_mut,
-        sync::{Arc, RwLock},
+        sync::{Arc, Mutex},
     },
 };
 
 pub struct Window {
     android_app: &'static mut AndroidApp,
+    paused: Mutex<bool>,
     event_engine: EventEngine,
 }
 
@@ -21,239 +31,176 @@ impl std::fmt::Debug for Window {
 }
 
 impl Window {
-    pub fn new(android_app: *mut c_void) -> Self {
-        Self {
-            android_app: unsafe { transmute(android_app) },
+    pub fn new(android_app: &'static mut AndroidApp) -> Arc<Self> {
+        let result = Arc::new(Self {
+            android_app: unsafe { transmute_copy(&android_app) },
+            paused: Mutex::new(false),
             event_engine: EventEngine::new(),
+        });
+        android_app.user_data = unsafe { transmute(result.as_ref()) };
+        android_app.on_app_cmd = handle_cmd;
+        android_app.on_input_event = handle_input;
+        result.initialize();
+        result
+    }
+
+    pub fn get_event_engine(&self) -> &EventEngine {
+        &self.event_engine
+    }
+
+    pub fn fetch_events(&self) {
+        if self.android_app.destroy_requested != 0 {
+            #[cfg(feature = "verbose_log")]
+            log_i!("Android app has been terminated already waiting for main loop to terminate.");
+            return;
+        }
+        let timeout: c_int = if *result_f!(self.paused.lock()) {
+            #[cfg(feature = "verbose_log")]
+            log_i!("Android app has been paused and timeout for event fetcher set to infinite.");
+            -1
+        } else {
+            0
+        };
+        let mut events = 0 as c_int;
+        let mut source = 0 as *mut AndroidPollSource;
+        while unsafe { ALooper_pollAll(timeout, null_mut(), &mut events, transmute(&mut source)) }
+            >= 0
+            && source != null_mut()
+        {
+            unsafe {
+                ((*source).process)(transmute_copy(&self.android_app), source);
+            }
         }
     }
 
-    // pub fn initialize(&self) {
-    //     let mut events = 0 as c_int;
-    //     let mut source = 0 as *mut AndroidPollSource;
-    //     while unsafe { (*self.and_app).destroy_requested == 0 } {
-    //         if unsafe { ALooper_pollAll(-1, null_mut(), &mut events, transmute(&mut source)) } >= 0
-    //         {
-    //             if source != null_mut() {
-    //                 unsafe {
-    //                     ((*source).process)(self.and_app, source);
-    //                 }
-    //             }
-    //             if unsafe { (*self.and_app).window != null_mut() } {
-    //                 return;
-    //             }
-    //         }
-    //     }
-    //     log_e!("Unexpected flow.");
-    // }
+    fn initialize(&self) {
+        let mut events = 0 as c_int;
+        let mut source = 0 as *mut AndroidPollSource;
+        while self.android_app.destroy_requested == 0 {
+            if unsafe { ALooper_pollAll(-1, null_mut(), &mut events, transmute(&mut source)) } >= 0
+            {
+                if source != null_mut() {
+                    unsafe {
+                        ((*source).process)(transmute_copy(&self.android_app), source);
+                    }
+                }
+                if self.android_app.window != null_mut() {
+                    let w =
+                        unsafe { window::ANativeWindow_getWidth(self.android_app.window) } as i64;
+                    let h =
+                        unsafe { window::ANativeWindow_getHeight(self.android_app.window) } as i64;
+                    self.event_engine.init_window_aspects(w, h);
+                    return;
+                }
+            }
+        }
+        unexpected_f!();
+    }
 
-    // pub fn set_renderer(&mut self, renderer: Arc<RwLock<RenderEngine>>) {
-    //     self.renderer = Some(renderer);
-    // }
+    fn handle_cmd(&self, cmd: AppCmd) {
+        match cmd {
+            AppCmd::InitWindow => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Window has been shown!");
+            }
+            AppCmd::TermWindow => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Window has been terminated.");
+                self.event_engine.quit();
+            }
+            AppCmd::GainedFocus => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has been focused.");
+                *result_f!(self.paused.lock()) = false;
+            }
+            AppCmd::LostFocus => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has lost focus.");
+                *result_f!(self.paused.lock()) = true;
+            }
+            AppCmd::Pause => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has been paused.");
+                *result_f!(self.paused.lock()) = true;
+            }
+            AppCmd::Start => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has been started.");
+            }
+            AppCmd::Resume => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has been resumed.");
+            }
+            AppCmd::SaveState => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app should save its state.");
+            }
+            AppCmd::Stop => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Android app has been stoped.");
+            }
+            AppCmd::Destroy => {
+                log_i!("Android app has been destroyed.");
+            }
+            _c @ _ => {
+                #[cfg(feature = "verbose_log")]
+                log_i!("Event {} not handled.", _c as i32);
+            }
+        }
+    }
 
-    // pub fn run(&self) {
-    //     loop {
-    //         let _ = self.fetch_events();
-    //         vxresult!(vxunwrap!(&self.renderer).read()).update();
-    //     }
-    // }
-
-    // fn handle_cmd(&self, cmd: i32) {
-    //     match unsafe { transmute::<i8, AppCmd>(cmd as i8) } {
-    //         AppCmd::InitWindow => {
-    //             log_i!("Window has been shown!");
-    //         }
-    //         AppCmd::TermWindow => {
-    //             log_i!("Window has been terminated!");
-    //         }
-    //         c @ _ => {
-    //             let _ = c;
-    //             log_i!("event {:?} not handled.", c);
-    //         }
-    //     }
-    // }
-
-    // fn handle_input(&self, e: &input::AInputEvent) -> i32 {
-    //     let et = unsafe { input::AInputEvent_getType(e) };
-    //     if et & input::AInputEventType::Motion as i32 != 0 {
-    //         let ea = unsafe { input::AMotionEvent_getAction(e) };
-    //         let a: input::AMotionEventAction = unsafe { transmute(ea & 0xFF) };
-    //         let pi = (ea & 0xFF00) >> 8;
-    //         let fi = unsafe { input::AMotionEvent_getPointerId(e, pi as usize) };
-    //         let ww = unsafe { window::ANativeWindow_getWidth((*self.and_app).window) } as Real;
-    //         let wh = unsafe { window::ANativeWindow_getHeight((*self.and_app).window) } as Real;
-    //         match a {
-    //             input::AMotionEventAction::PointerDown | input::AMotionEventAction::Down => {
-    //                 let e = Event::new(EventType::Touch(Touch::Raw {
-    //                     index: fi as FingerIndexType,
-    //                     action: TouchAction::Press,
-    //                     point: (
-    //                         unsafe { input::AMotionEvent_getRawX(e, pi as usize) } / ww,
-    //                         unsafe { input::AMotionEvent_getRawY(e, pi as usize) } / wh,
-    //                     ),
-    //                 }));
-    //                 let ge = vxresult!(self.gesture_translator.write()).receive(&e);
-    //                 let core_app = vxresult!(vxunwrap!(&self.core_app).read());
-    //                 core_app.on_event(e);
-    //                 for e in ge {
-    //                     core_app.on_event(e);
-    //                 }
-    //                 return 1;
-    //             }
-    //             input::AMotionEventAction::PointerUp | input::AMotionEventAction::Up => {
-    //                 let e = Event::new(EventType::Touch(Touch::Raw {
-    //                     index: fi as FingerIndexType,
-    //                     action: TouchAction::Release,
-    //                     point: (
-    //                         unsafe { input::AMotionEvent_getX(e, pi as usize) } / ww,
-    //                         unsafe { input::AMotionEvent_getY(e, pi as usize) } / wh,
-    //                     ),
-    //                 }));
-    //                 let ge = vxresult!(self.gesture_translator.write()).receive(&e);
-    //                 let core_app = vxresult!(vxunwrap!(&self.core_app).read());
-    //                 core_app.on_event(e);
-    //                 for e in ge {
-    //                     core_app.on_event(e);
-    //                 }
-    //                 return 1;
-    //             }
-    //             input::AMotionEventAction::Move => {
-    //                 let hs = unsafe { input::AMotionEvent_getHistorySize(e) };
-    //                 let current = (
-    //                     unsafe { input::AMotionEvent_getRawX(e, pi as usize) } / ww,
-    //                     unsafe { input::AMotionEvent_getRawY(e, pi as usize) } / wh,
-    //                 );
-    //                 let previous = if hs > 0 {
-    //                     (
-    //                         unsafe {
-    //                             input::AMotionEvent_getHistoricalRawX(e, pi as usize, hs - 1)
-    //                         } / ww,
-    //                         unsafe {
-    //                             input::AMotionEvent_getHistoricalRawY(e, pi as usize, hs - 1)
-    //                         } / wh,
-    //                     )
-    //                 } else {
-    //                     current
-    //                 };
-    //                 let e = Event::new(EventType::Move(Move::Touch {
-    //                     index: fi as FingerIndexType,
-    //                     previous,
-    //                     current,
-    //                     delta: (current.0 - previous.0, current.1 - previous.1),
-    //                 }));
-    //                 let ge = vxresult!(self.gesture_translator.write()).receive(&e);
-    //                 let core_app = vxresult!(vxunwrap!(&self.core_app).read());
-    //                 core_app.on_event(e);
-    //                 for e in ge {
-    //                     core_app.on_event(e);
-    //                 }
-    //                 return 1;
-    //             }
-    //             _ => (),
-    //         }
-    //     } else if et & input::AInputEventType::Key as i32 != 0 {
-    //         vxunimplemented!();
-    //     } else {
-    //         vxunexpected!();
-    //     }
-
-    //     0
-    // }
-
-    // pub fn fetch_events(&self) -> Vec<Event> {
-    //     let mut events = 0 as c_int;
-    //     let mut source = 0 as *mut AndroidPollSource;
-    //     while unsafe {
-    //         (*self.and_app).destroy_requested == 0
-    //             && ALooper_pollAll(0, null_mut(), &mut events, transmute(&mut source)) >= 0
-    //     } && source != null_mut()
-    //     {
-    //         unsafe {
-    //             ((*source).process)(self.and_app, source);
-    //         }
-    //     }
-    //     let events = vxresult!(self.events.read()).clone();
-    //     vxresult!(self.events.write()).clear();
-    //     return events;
-    // }
+    fn handle_input(&self, e: *mut input::AInputEvent) -> i32 {
+        let event_type = unsafe { input::AInputEvent_getType(e) };
+        if event_type & input::AInputEventType::Motion as i32 != 0 {
+            let event_action = unsafe { input::AMotionEvent_getAction(e) };
+            let action: input::AMotionEventAction = unsafe { transmute(event_action & 0xFF) };
+            let pointer_index = ((event_action & 0xFF00) >> 8) as usize;
+            let finger_index =
+                unsafe { input::AMotionEvent_getPointerId(e, pointer_index) } as FingerIndexType;
+            let pointer_x = unsafe { input::AMotionEvent_getRawX(e, pointer_index) } as i64;
+            let pointer_y = unsafe { input::AMotionEvent_getRawY(e, pointer_index) } as i64;
+            match action {
+                input::AMotionEventAction::PointerDown | input::AMotionEventAction::Down => {
+                    self.event_engine
+                        .finger_down(pointer_x, pointer_y, finger_index);
+                }
+                input::AMotionEventAction::PointerUp | input::AMotionEventAction::Up => {
+                    self.event_engine
+                        .finger_up(pointer_x, pointer_y, finger_index);
+                }
+                input::AMotionEventAction::Move => {
+                    self.event_engine
+                        .finger_move(pointer_x, pointer_y, finger_index);
+                }
+                _ => (),
+            }
+        } else if event_type & input::AInputEventType::Key as i32 != 0 {
+            #[cfg(feature = "verbose_log")]
+            log_i!("Unhandled");
+        } else {
+            unexpected_f!();
+        }
+        0
+    }
 
     // pub fn get_window_aspect_ratio(&self) -> f32 {
     //     1.7
     // }
 }
 
-// extern "C" fn handle_cmd(android_app: *mut AndroidApp, cmd: i32) {
-//     unsafe {
-//         vxresult!(vxunwrap!(&(*android_app).os_app).read()).handle_cmd(cmd);
-//     }
-// }
-
-// extern "C" fn handle_input(android_app: *mut AndroidApp, event: *mut input::AInputEvent) -> i32 {
-//     unsafe {
-//         return vxresult!(vxunwrap!(&(*android_app).os_app).read()).handle_input(transmute(event));
-//     }
-// }
-
-// impl Drop for Window {
-//     fn drop(&mut self) {
-//         log_e!(
-//             "Error unexpected deletion of Os Window this is a \
-//              TODO I will decide later how to do finall termination."
-//         );
-//     }
-// }
-
-// use super::rect::ARect;
-
-// #[repr(u32)]
-// pub enum WindowFormat {
-//     Rgba8888 = 1,
-//     Rgbx8888 = 2,
-//     Rgb565 = 4,
-// }
-
-pub type ANativeWindow = c_void;
-
-#[repr(C)]
-pub struct ANativeWindowBuffer {
-    pub width: i32,
-    pub height: i32,
-    pub stride: i32,
-    pub format: i32,
-    pub bits: *mut c_void,
-    pub reserved: [u32; 6usize],
+extern "C" fn handle_cmd(android_app: &mut AndroidApp, cmd: AppCmd) {
+    let window: &Window = unsafe { transmute(android_app.user_data) };
+    window.handle_cmd(cmd);
 }
 
-// impl Default for ANativeWindowBuffer {
-//     fn default() -> Self {
-//         unsafe { zeroed() }
-//     }
-// }
+extern "C" fn handle_input(android_app: &mut AndroidApp, event: *mut input::AInputEvent) -> i32 {
+    let window: &Window = unsafe { transmute(android_app.user_data) };
+    window.handle_input(event)
+}
 
-// #[cfg_attr(target_os = "android", link(name = "android", kind = "dylib"))]
-// extern "C" {
-//     pub fn ANativeWindow_acquire(window: *mut ANativeWindow);
-//     pub fn ANativeWindow_release(window: *mut ANativeWindow);
-//     pub fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
-//     pub fn ANativeWindow_getHeight(window: *mut ANativeWindow) -> i32;
-//     pub fn ANativeWindow_getFormat(window: *mut ANativeWindow) -> i32;
-//     pub fn ANativeWindow_setBuffersGeometry(
-//         window: *mut ANativeWindow,
-//         width: i32,
-//         height: i32,
-//         format: i32,
-//     ) -> i32;
-//     pub fn ANativeWindow_lock(
-//         window: *mut ANativeWindow,
-//         out_buffer: *mut ANativeWindowBuffer,
-//         in_out_dirty_bounds: *mut ARect,
-//     ) -> i32;
-//     pub fn ANativeWindow_unlockAndPost(window: *mut ANativeWindow) -> i32;
-// }
-
-#[macro_export]
-macro_rules! create_window {
-    () => {
-        crate::window::Window::new(android_app)
-    };
+#[cfg(feature = "verbose_log")]
+impl Drop for Window {
+    fn drop(&mut self) {
+        log_i!("Android Window droped.");
+    }
 }

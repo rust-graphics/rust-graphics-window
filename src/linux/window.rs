@@ -20,7 +20,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new() -> Self {
+    pub fn new(_: ()) -> Self {
         let xcb_lib = xcb::Xcb::new();
         let mut scr = 0 as c_int;
         let connection: *mut xcb::Connection = unsafe { (xcb_lib.connect)(null_mut(), &mut scr) };
@@ -132,12 +132,12 @@ impl Window {
         match e.response_type as c_uint & 0x7F {
             xproto::DESTROY_NOTIFY => {
                 if client_msg.data.data[0] == unsafe { (*self.atom_wm_delete_window).atom } {
-                    self.event_engine.broadcast(Event::new(Data::Quit));
+                    self.event_engine.quit();
                 }
             }
             xproto::CLIENT_MESSAGE => {
                 if client_msg.data.data[0] == unsafe { (*self.atom_wm_delete_window).atom } {
-                    self.event_engine.broadcast(Event::new(Data::Quit));
+                    self.event_engine.quit();
                 }
             }
             xproto::MOTION_NOTIFY => {
@@ -413,11 +413,4 @@ impl Drop for Window {
         #[cfg(feature = "verbose_log")]
         log_i!("Rust-Graphics's Window droped.");
     }
-}
-
-#[macro_export]
-macro_rules! create_window {
-    () => {
-        crate::window::Window::new()
-    };
 }

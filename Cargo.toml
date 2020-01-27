@@ -15,11 +15,11 @@ libc = "0.2"
 
 rust_graphics_library_loader = "0.1"
 rust_graphics_log = "0.1"
-
+rust_graphics_main = {version = "*", path = "../rust-graphics-main"}
 
 [target.'cfg(target_os = "android")'.dependencies]
-rust_graphics_jni = {version = "*", path = "../rust-graphics-jni"}
+rust_graphics_android = {version = "*", path = "../rust-graphics-android"}
 
 [features]
 debug_derive = []
-verbose_log = []
+verbose_log = ["debug_derive"]

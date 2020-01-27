@@ -277,8 +277,9 @@ impl Engine {
         let ls = listeners.clone();
         let processor = Some(spawn(move || {
             let mut pending_window_resize: Option<WindowSizeChange> = None;
+            let wait_dur = Duration::from_millis(100);
             'engine_loop: loop {
-                let e: Option<Event> = match receiver.recv_timeout(Duration::from_millis(100)) {
+                let e: Option<Event> = match receiver.recv_timeout(wait_dur) {
                     Ok(e) => Some(e),
                     Err(_) => None,
                 };
@@ -380,6 +381,12 @@ impl Engine {
         }));
     }
 
+    pub(crate) fn finger_down(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+
+    pub(crate) fn finger_up(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+
+    pub(crate) fn finger_move(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+
     pub(crate) fn button_pressed(&self, b: Button) {
         self.broadcast(Event::new({
             let mut state = result_f!(self.state.lock());
@@ -440,6 +447,10 @@ impl Engine {
             state.window.changing_aspects = None;
             d
         })));
+    }
+
+    pub(crate) fn quit(&self) {
+        self.broadcast(Event::new(Data::Quit));
     }
 }
 
