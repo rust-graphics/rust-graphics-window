@@ -8,7 +8,7 @@ use {
             window,
         },
     },
-    log::{log_i, result_f, unexpected_f, unimplemented_f},
+    log::{log_i, result_f, unexpected_f},
     std::{
         mem::{transmute, transmute_copy},
         os::raw::c_int,
@@ -17,9 +17,14 @@ use {
     },
 };
 
+struct State {
+    focused: bool,
+    paused: bool,
+}
+
 pub struct Window {
     android_app: &'static mut AndroidApp,
-    paused: Mutex<bool>,
+    state: Mutex<State>,
     event_engine: EventEngine,
 }
 
@@ -34,7 +39,10 @@ impl Window {
     pub fn new(android_app: &'static mut AndroidApp) -> Arc<Self> {
         let result = Arc::new(Self {
             android_app: unsafe { transmute_copy(&android_app) },
-            paused: Mutex::new(false),
+            state: Mutex::new(State {
+                paused: false,
+                focused: false,
+            }),
             event_engine: EventEngine::new(),
         });
         android_app.user_data = unsafe { transmute(result.as_ref()) };
@@ -54,10 +62,8 @@ impl Window {
             log_i!("Android app has been terminated already waiting for main loop to terminate.");
             return;
         }
-        let timeout: c_int = if *result_f!(self.paused.lock()) {
-            #[cfg(feature = "verbose_log")]
-            log_i!("Android app has been paused and timeout for event fetcher set to infinite.");
-            -1
+        let timeout: c_int = if result_f!(self.state.lock()).paused {
+            10
         } else {
             0
         };
@@ -84,7 +90,10 @@ impl Window {
                         ((*source).process)(transmute_copy(&self.android_app), source);
                     }
                 }
-                if self.android_app.window != null_mut() {
+                if {
+                    let state = result_f!(self.state.lock());
+                    !state.paused && state.focused
+                } {
                     let w =
                         unsafe { window::ANativeWindow_getWidth(self.android_app.window) } as i64;
                     let h =
@@ -111,17 +120,19 @@ impl Window {
             AppCmd::GainedFocus => {
                 #[cfg(feature = "verbose_log")]
                 log_i!("Android app has been focused.");
-                *result_f!(self.paused.lock()) = false;
+                result_f!(self.state.lock()).focused = true;
+                self.event_engine.window_focus();
             }
             AppCmd::LostFocus => {
                 #[cfg(feature = "verbose_log")]
                 log_i!("Android app has lost focus.");
-                *result_f!(self.paused.lock()) = true;
+                result_f!(self.state.lock()).focused = false;
+                self.event_engine.window_unfocus();
             }
             AppCmd::Pause => {
                 #[cfg(feature = "verbose_log")]
                 log_i!("Android app has been paused.");
-                *result_f!(self.paused.lock()) = true;
+                result_f!(self.state.lock()).paused = true;
             }
             AppCmd::Start => {
                 #[cfg(feature = "verbose_log")]
@@ -130,6 +141,7 @@ impl Window {
             AppCmd::Resume => {
                 #[cfg(feature = "verbose_log")]
                 log_i!("Android app has been resumed.");
+                result_f!(self.state.lock()).paused = false;
             }
             AppCmd::SaveState => {
                 #[cfg(feature = "verbose_log")]

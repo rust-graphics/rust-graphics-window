@@ -390,7 +390,7 @@ impl Window {
         result
     }
 
-    pub fn get_engine(&self) -> &Engine {
+    pub fn get_event_engine(&self) -> &Engine {
         &self.event_engine
     }
 }

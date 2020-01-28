@@ -119,6 +119,8 @@ pub struct WindowSizeChange {
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
 pub enum Window {
     SizeChange(WindowSizeChange),
+    Focus,
+    Unfocus,
 }
 
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
@@ -127,12 +129,18 @@ pub enum Move {
         previous: (i64, i64),
         current: (i64, i64),
         delta: (i64, i64),
+        normalized_previous: (f64, f64),
+        normalized_current: (f64, f64),
+        normalized_delta: (f64, f64),
     },
     Touch {
         index: FingerIndexType,
         previous: (i64, i64),
         current: (i64, i64),
         delta: (i64, i64),
+        normalized_previous: (f64, f64),
+        normalized_current: (f64, f64),
+        normalized_delta: (f64, f64),
     },
 }
 
@@ -158,14 +166,22 @@ pub enum TouchGesture {
         previous: (i64, i64),
         current: (i64, i64),
         delta: (i64, i64),
+        normalized_start: (f64, f64),
+        normalized_previous: (f64, f64),
+        normalized_current: (f64, f64),
+        normalized_delta: (f64, f64),
     },
     Scale {
-        first: (FingerIndexType, (i64, i64)),
-        second: (FingerIndexType, (i64, i64)),
+        first: (FingerIndexType, TouchState),
+        second: (FingerIndexType, TouchState),
         start: i64,
         previous: i64,
         current: i64,
         delta: i64,
+        normalized_start: i64,
+        normalized_previous: i64,
+        normalized_current: i64,
+        normalized_delta: i64,
     },
 }
 
@@ -183,12 +199,13 @@ pub enum Touch {
         start_time: Instant,
         duration: Duration,
         state: GestureState,
-        gest: TouchGesture,
+        data: TouchGesture,
     },
     Raw {
         index: FingerIndexType,
         action: TouchAction,
         point: (i64, i64),
+        normalized_point: (f64, f64),
     },
 }
 
@@ -245,20 +262,52 @@ pub trait Listener: Send + Sync {
 pub struct WindowAspects {
     width: i64,
     height: i64,
+    smallest: i64,
     ratio: f64,
+    normalized_width: f64,
+    normalized_height: f64,
 }
 
 #[derive(Default)]
 struct WindowState {
     aspects: WindowAspects,
-    changing_aspects: Option<WindowAspects>,
+}
+
+impl WindowState {
+    fn normalize(&self, x: i64, y: i64) -> (f64, f64) {
+        (self.normalize_width(x), self.normalize_height(y))
+    }
+
+    fn normalize_width(&self, x: i64) -> f64 {
+        (x - self.aspects.width) as f64 / self.aspects.smallest as f64
+    }
+
+    fn normalize_height(&self, x: i64) -> f64 {
+        (x - self.aspects.height) as f64 / self.aspects.smallest as f64
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct TouchState {
+    position: (i64, i64),
+    normalized_position: (f64, f64),
+    hard_pressed: bool,
+}
+
+#[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
+#[derive(Default)]
+struct PointerState {
+    position: (i64, i64),
+    normalized_position: (f64, f64),
 }
 
 #[derive(Default)]
 struct EngineState {
     window: WindowState,
-    mouse_position_x: i64,
-    mouse_position_y: i64,
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    fingers: BTreeMap<FingerIndexType, TouchState>,
+    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
+    mouse: PointerState,
     pressed_buttons: BTreeSet<Button>,
 }
 
@@ -294,6 +343,11 @@ impl Engine {
                                     width: p.current.width - p.previous.width,
                                     height: p.current.height - p.previous.height,
                                     ratio: p.current.ratio - p.previous.ratio,
+                                    smallest: p.current.smallest - p.previous.smallest,
+                                    normalized_width: p.current.normalized_width
+                                        - p.previous.normalized_width,
+                                    normalized_height: p.current.normalized_height
+                                        - p.previous.normalized_height,
                                 };
                             } else {
                                 pending_window_resize = Some(e.clone());
@@ -352,40 +406,132 @@ impl Engine {
     }
 
     pub(crate) fn init_window_aspects(&self, width: i64, height: i64) {
+        let smallest = if width > height { height } else { width };
+        let normalized_width = width as f64 / smallest as f64;
+        let normalized_height = height as f64 / smallest as f64;
         let mut state = result_f!(self.state.lock());
         state.window.aspects.width = width;
         state.window.aspects.height = height;
         state.window.aspects.ratio = width as f64 / height as f64;
+        state.window.aspects.smallest = smallest;
+        state.window.aspects.normalized_width = normalized_width;
+        state.window.aspects.normalized_height = normalized_height;
     }
 
+    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
     pub(crate) fn init_mouse_position(&self, p: (i64, i64)) {
         let mut state = result_f!(self.state.lock());
-        state.mouse_position_x = p.0;
-        state.mouse_position_y = p.1;
+        state.mouse.position = p;
+        state.mouse.normalized_position = state.window.normalize(p.0, p.1);
     }
 
+    #[cfg(all(not(target_os = "android"), not(target_os = "ios")))]
     pub(crate) fn set_mouse_position(&self, cur: (i64, i64)) {
         self.broadcast(Event::new({
             let mut state = result_f!(self.state.lock());
+            let nrm_cur = state.window.normalize(cur.0, cur.1);
             let d = Data::Move(Move::Mouse {
-                previous: (state.mouse_position_x, state.mouse_position_y),
+                previous: state.mouse.position,
+                normalized_previous: state.mouse.normalized_position,
                 current: cur,
+                normalized_current: nrm_cur,
                 delta: (
-                    cur.0 - state.mouse_position_x,
-                    cur.1 - state.mouse_position_y,
+                    cur.0 - state.mouse.position.0,
+                    cur.1 - state.mouse.position.1,
+                ),
+                normalized_delta: (
+                    nrm_cur.0 - state.mouse.normalized_position.0,
+                    nrm_cur.1 - state.mouse.normalized_position.1,
                 ),
             });
-            state.mouse_position_x = cur.0;
-            state.mouse_position_y = cur.1;
+            state.mouse.position = cur;
+            state.mouse.normalized_position = nrm_cur;
             d
         }));
     }
 
-    pub(crate) fn finger_down(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn finger_down(&self, x: i64, y: i64, index: FingerIndexType) {
+        let nrm = {
+            let mut s = result_f!(self.state.lock());
+            let nrm = s.window.normalize(x, y);
+            s.fingers.insert(
+                index,
+                TouchState {
+                    position: (x, y),
+                    normalized_position: nrm,
+                    hard_pressed: false,
+                },
+            );
+            nrm
+        };
+        self.broadcast(Event::new(Data::Touch(Touch::Raw {
+            index,
+            action: TouchAction::Press,
+            point: (x, y),
+            normalized_point: nrm,
+        })));
+    }
 
-    pub(crate) fn finger_up(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn finger_up(&self, x: i64, y: i64, index: FingerIndexType) {
+        let nrm = {
+            let mut s = result_f!(self.state.lock());
+            s.fingers.remove(&index);
+            s.window.normalize(x, y)
+        };
+        self.broadcast(Event::new(Data::Touch(Touch::Raw {
+            index,
+            action: TouchAction::Release,
+            point: (x, y),
+            normalized_point: nrm,
+        })));
+    }
 
-    pub(crate) fn finger_move(&self, x: i64, y: i64, finget_index: FingerIndexType) {}
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    pub(crate) fn finger_move(&self, x: i64, y: i64, index: FingerIndexType) {
+        let m = {
+            let mut s = result_f!(self.state.lock());
+            let nrm = s.window.normalize(x, y);
+            let finger = if let Some(finger) = s.fingers.get(&index) {
+                finger.clone()
+            } else {
+                s.fingers.insert(
+                    index,
+                    TouchState {
+                        position: (x, y),
+                        normalized_position: nrm,
+                        hard_pressed: false,
+                    },
+                );
+                return;
+            };
+            let delta = (x - finger.position.0, y - finger.position.1);
+            let normalized_delta = (
+                nrm.0 - finger.normalized_position.0,
+                nrm.1 - finger.normalized_position.1,
+            );
+            let m = Move::Touch {
+                index,
+                previous: finger.position,
+                current: (x, y),
+                delta,
+                normalized_previous: finger.normalized_position,
+                normalized_current: nrm,
+                normalized_delta,
+            };
+            s.fingers.insert(
+                index,
+                TouchState {
+                    position: (x, y),
+                    normalized_position: nrm,
+                    hard_pressed: false,
+                },
+            );
+            m
+        };
+        self.broadcast(Event::new(Data::Move(m)));
+    }
 
     pub(crate) fn button_pressed(&self, b: Button) {
         self.broadcast(Event::new({
@@ -419,38 +565,55 @@ impl Engine {
                 return;
             }
             let ratio = width as f64 / height as f64;
-            state.window.changing_aspects = Some(WindowAspects {
-                width,
-                height,
-                ratio,
-            });
+            let smallest = if width > height { height } else { width };
+            let normalized_width = width as f64 / smallest as f64;
+            let normalized_height = height as f64 / smallest as f64;
             let d = Window::SizeChange(WindowSizeChange {
                 current: WindowAspects {
                     width,
                     height,
                     ratio,
+                    smallest,
+                    normalized_width,
+                    normalized_height,
                 },
                 previous: WindowAspects {
                     width: state.window.aspects.width,
                     height: state.window.aspects.height,
                     ratio: state.window.aspects.ratio,
+                    smallest: state.window.aspects.smallest,
+                    normalized_width: state.window.aspects.normalized_width,
+                    normalized_height: state.window.aspects.normalized_height,
                 },
                 delta: WindowAspects {
                     width: width - state.window.aspects.width,
                     height: height - state.window.aspects.height,
                     ratio: ratio - state.window.aspects.ratio,
+                    smallest: smallest - state.window.aspects.smallest,
+                    normalized_width: normalized_width - state.window.aspects.normalized_width,
+                    normalized_height: normalized_height - state.window.aspects.normalized_height,
                 },
             });
             state.window.aspects.width = width;
             state.window.aspects.height = height;
             state.window.aspects.ratio = ratio;
-            state.window.changing_aspects = None;
+            state.window.aspects.smallest = smallest;
+            state.window.aspects.normalized_width = normalized_width;
+            state.window.aspects.normalized_height = normalized_height;
             d
         })));
     }
 
     pub(crate) fn quit(&self) {
         self.broadcast(Event::new(Data::Quit));
+    }
+
+    pub(crate) fn window_focus(&self) {
+        self.broadcast(Event::new(Data::Window(Window::Focus)));
+    }
+
+    pub(crate) fn window_unfocus(&self) {
+        self.broadcast(Event::new(Data::Window(Window::Unfocus)));
     }
 }
 
