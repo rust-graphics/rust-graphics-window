@@ -17,7 +17,7 @@ impl window::event::Listener for Listener {
         match event.get_data() {
             &window::event::Data::Quit => self.running = false,
             _e @ _ => {
-                #[cfg(feature = "debug_derive")]
+                #[cfg(feature = "verbose_log")]
                 log_i!("{:?}", _e);
             }
         }

@@ -1,19 +1,27 @@
-use super::super::event::*;
-use super::xcb;
-use super::xproto;
-
-use log::{log_e, log_f, log_i};
-use std::{
-    ffi::CString,
-    mem::transmute,
-    os::raw::{c_int, c_uint},
-    ptr::null_mut,
+use {
+    super::{glx, x11, x11_xcb, xcb, xproto},
+    crate::event::*,
+    log::{log_e, log_f, log_i},
+    std::{
+        ffi::CString,
+        mem::{transmute, transmute_copy},
+        os::raw::{c_int, c_uint},
+        ptr::{null, null_mut},
+    },
 };
 
 pub struct Window {
+    x11_lib: x11::X11,
+    display: *mut x11::Display,
+    _x11_xcb_lib: x11_xcb::X11Xcb,
+    glx_lib: glx::Glx,
+    #[cfg(not(feature = "vulkan"))]
+    glx_window: glx::Window,
+    #[cfg(not(feature = "vulkan"))]
+    glx_context: glx::Context,
     xcb_lib: xcb::Xcb,
     connection: *mut xcb::Connection,
-    screen: *mut xcb::Screen,
+    screen: &'static mut xcb::Screen,
     window: xcb::Window,
     atom_wm_delete_window: *mut xcb::InternAtomReply,
     event_engine: Engine,
@@ -21,21 +29,34 @@ pub struct Window {
 
 impl Window {
     pub fn new(_: ()) -> Self {
+        let x11_lib = x11::X11::new();
         let xcb_lib = xcb::Xcb::new();
-        let mut scr = 0 as c_int;
-        let connection: *mut xcb::Connection = unsafe { (xcb_lib.connect)(null_mut(), &mut scr) };
-        if connection == null_mut() {
-            log_f!("Could not find a xcb connection.");
+        let _x11_xcb_lib = x11_xcb::X11Xcb::new();
+        let glx_lib = glx::Glx::new();
+
+        let display = (x11_lib.open_display)(null());
+        if display == null_mut() {
+            log_f!("Can not open X11 display.");
         }
+        let default_screen = (x11_lib.default_screen)(display);
+
+        let connection = (_x11_xcb_lib.get_xcb_connection)(display);
+        if connection.is_null() {
+            log_f!("Could not find a XCB connection.");
+        }
+        (_x11_xcb_lib.set_event_queue_owner)(display, x11_xcb::XCB_OWNS_EVENT_QUEUE);
         let setup = (xcb_lib.get_setup)(connection);
         let mut iter = (xcb_lib.setup_roots_iterator)(setup);
-        for _ in 0..scr {
+        for _ in 0..default_screen {
+            if iter.rem == 0 {
+                break;
+            }
             (xcb_lib.screen_next)(&mut iter);
         }
-        let screen = iter.data;
-        let window: xcb::Window = unsafe { transmute((xcb_lib.generate_id)(connection)) };
-        let mut value_list = vec![0u32; 32];
-        value_list[0] = unsafe { (*screen).black_pixel };
+        let screen: &'static mut xcb::Screen = unsafe { transmute(iter.data) };
+
+        let mut value_list = [0u32; 3];
+        value_list[0] = screen.black_pixel;
         value_list[1] = (xcb::EventMask::KEY_RELEASE
             | xcb::EventMask::KEY_PRESS
             | xcb::EventMask::EXPOSURE
@@ -45,24 +66,143 @@ impl Window {
             | xcb::EventMask::BUTTON_RELEASE
             | xcb::EventMask::RESIZE_REDIRECT)
             .bits();
+        #[cfg(feature = "vulkan")]
         let value_mask = (xcb::CW::BACK_PIXEL | xcb::CW::EVENT_MASK).bits();
+        let window: xcb::Window = (xcb_lib.generate_id)(connection);
         let window_width = 1000;
         let window_height = 500;
+
+        #[cfg(feature = "vulkan")]
         (xcb_lib.create_window)(
             connection,
             xcb::COPY_FROM_PARENT as u8,
             window,
-            unsafe { (*screen).root },
+            screen.root,
             0,
             0,
             window_width,
             window_height,
             0,
             xcb::WindowClass::InputOutput as u16,
-            unsafe { (*screen).root_visual },
+            screen.root_visual,
             value_mask,
             value_list.as_ptr(),
         );
+
+        #[cfg(not(feature = "vulkan"))]
+        let (glx_context, glx_window) = {
+            let visual_attribs = [
+                glx::X_RENDERABLE,
+                glx::TRUE,
+                glx::DRAWABLE_TYPE,
+                glx::WINDOW_BIT,
+                glx::RENDER_TYPE,
+                glx::RGBA_BIT,
+                glx::X_VISUAL_TYPE,
+                glx::TRUE_COLOR,
+                glx::RED_SIZE,
+                8,
+                glx::GREEN_SIZE,
+                8,
+                glx::BLUE_SIZE,
+                8,
+                glx::ALPHA_SIZE,
+                8,
+                glx::DEPTH_SIZE,
+                24,
+                glx::STENCIL_SIZE,
+                8,
+                glx::DOUBLEBUFFER,
+                glx::TRUE,
+                glx::SAMPLE_BUFFERS,
+                1,
+                glx::SAMPLES,
+                4,
+                glx::NONE,
+            ];
+
+            let mut visual_id: c_int = 0;
+            let mut num_fb_configs: c_int = 0;
+            let fb_configs = (glx_lib.choose_fb_config)(
+                display,
+                default_screen,
+                visual_attribs.as_ptr(),
+                &mut num_fb_configs,
+            );
+            if fb_configs.is_null() || num_fb_configs == 0 {
+                log_f!("glXGetFBConfigs failed");
+            }
+
+            #[cfg(feature = "verbose_log")]
+            log_i!("Found {} matching FB configs", num_fb_configs);
+
+            let fb_config = unsafe { *fb_configs };
+            if glx::SUCCESS
+                != (glx_lib.get_fb_config_attrib)(
+                    display,
+                    fb_config,
+                    glx::VISUAL_ID,
+                    &mut visual_id,
+                )
+            {
+                log_f!("Failed to get Visual ID");
+            }
+
+            #[cfg(feature = "verbose_log")]
+            log_i!(
+                "Visual ID of the selected FB config is {} and Root Visual ID is {}.",
+                visual_id,
+                screen.root_visual
+            );
+
+            let context = (glx_lib.create_new_context)(
+                display,
+                fb_config,
+                glx::RGBA_TYPE,
+                null_mut(),
+                glx::TRUE,
+            );
+            if context.is_null() {
+                log_f!("glXCreateNewContext failed");
+            }
+
+            let colormap = (xcb_lib.generate_id)(connection);
+            (xcb_lib.create_colormap)(
+                connection,
+                xcb::COLORMAP_ALLOC_NONE as u8,
+                colormap,
+                screen.root,
+                visual_id as xcb::VisualId,
+            );
+            value_list[0] = value_list[1];
+            value_list[1] = colormap;
+            let value_mask = (xcb::CW::COLORMAP | xcb::CW::EVENT_MASK).bits();
+            (xcb_lib.create_window)(
+                connection,
+                xcb::COPY_FROM_PARENT as u8,
+                window,
+                screen.root,
+                0,
+                0,
+                window_width,
+                window_height,
+                0,
+                xcb::WindowClass::InputOutput as u16,
+                visual_id as xcb::VisualId,
+                value_mask,
+                value_list.as_ptr(),
+            );
+            (xcb_lib.map_window)(connection, window);
+            let glx_window = (glx_lib.create_window)(display, fb_config, window as glx::Window, 0);
+            if glx_window == 0 {
+                log_f!("Failed to generate GLX Window.");
+            }
+            if 0 == (glx_lib.make_context_current)(display, glx_window, glx_window, context) {
+                log_f!("Can not make the glx context current.");
+            }
+            (context, glx_window)
+        };
+
         /* Magic code that will send notification when window is destroyed */
         let cs = CString::new("WM_PROTOCOLS".to_string().into_bytes()).unwrap();
         let cookie = (xcb_lib.intern_atom)(connection, 1, 12, cs.as_ptr());
@@ -101,6 +241,12 @@ impl Window {
         let event_engine = Engine::new();
         event_engine.init_window_aspects(window_width as i64, window_height as i64);
         let result = Self {
+            x11_lib,
+            display,
+            _x11_xcb_lib,
+            glx_lib,
+            glx_window,
+            glx_context,
             xcb_lib,
             connection,
             screen,
@@ -371,18 +517,16 @@ impl Window {
     }
 
     pub fn get_screen(&self) -> *mut xcb::Screen {
-        return self.screen;
+        unsafe { transmute_copy(&self.screen) }
     }
 
     fn get_mouse_position(&self) -> (i64, i64) {
-        let reply: &mut xcb::QueryPointerReply = unsafe {
-            let coockie = (self.xcb_lib.query_pointer)(self.connection, self.window);
-            transmute((self.xcb_lib.query_pointer_reply)(
-                self.connection,
-                coockie,
-                null_mut(),
-            ))
-        };
+        let coockie = (self.xcb_lib.query_pointer)(self.connection, self.window);
+        let replay = (self.xcb_lib.query_pointer_reply)(self.connection, coockie, null_mut());
+        if replay.is_null() {
+            log_f!("Can not fetch mouse position.");
+        }
+        let reply: &mut xcb::QueryPointerReply = unsafe { transmute(replay) };
         let result = (reply.root_x as i64, reply.root_y as i64);
         unsafe {
             libc::free(transmute(reply));
@@ -408,8 +552,12 @@ impl std::fmt::Debug for Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
+        #[cfg(not(feature = "vulkan"))]
+        (self.glx_lib.destroy_window)(self.display, self.glx_window);
         (self.xcb_lib.destroy_window)(self.connection, self.window);
-        (self.xcb_lib.disconnect)(self.connection);
+        #[cfg(not(feature = "vulkan"))]
+        (self.glx_lib.destroy_context)(self.display, self.glx_context);
+        (self.x11_lib.close_display)(self.display);
         #[cfg(feature = "verbose_log")]
         log_i!("Rust-Graphics's Window droped.");
     }

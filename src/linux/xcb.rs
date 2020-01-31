@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use liblod::Linker;
+use library_loader::Linker;
 use log::unwrap_f;
 use std::mem::zeroed;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
@@ -160,8 +160,11 @@ pub(crate) type Atom = u32;
 pub(crate) type KeyCode = u8;
 pub(crate) type Button = u8;
 pub(crate) type TimeStamp = u32;
+pub(crate) type ColormapAlloc = u32;
 pub(crate) type ButtonReleaseEvent = ButtonPressEvent;
 pub(crate) type KeyReleaseEvent = KeyPressEvent;
+
+pub const COLORMAP_ALLOC_NONE: ColormapAlloc = 0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -453,8 +456,7 @@ impl Default for QueryPointerReply {
 pub(crate) const COPY_FROM_PARENT: u64 = 0;
 
 pub(crate) struct Xcb {
-    pub(crate) connect:
-        unsafe extern "C" fn(displayname: *const c_char, screenp: *mut c_int) -> *mut Connection,
+    // pub(crate) connect: unsafe extern "C" fn(displayname: *const c_char, screenp: *mut c_int) -> *mut Connection,
     pub(crate) get_setup: extern "C" fn(c: *mut Connection) -> *const Setup,
     pub(crate) setup_roots_iterator: extern "C" fn(R: *const Setup) -> ScreenIterator,
     pub(crate) screen_next: extern "C" fn(i: *mut ScreenIterator),
@@ -506,7 +508,9 @@ pub(crate) struct Xcb {
         e: *mut *mut GenericError,
     ) -> *mut QueryPointerReply,
     pub(crate) destroy_window: extern "C" fn(*mut Connection, Window) -> VoidCookie,
-    pub(crate) disconnect: extern "C" fn(*mut Connection),
+    // pub(crate) disconnect: extern "C" fn(*mut Connection),
+    pub(crate) create_colormap:
+        extern "C" fn(*mut Connection, u8, ColorMap, Window, VisualId) -> VoidCookie,
     _lib: Linker,
 }
 
@@ -519,7 +523,7 @@ impl Xcb {
             };
         }
         Self {
-            connect: fun!(connect),
+            // connect: fun!(connect),
             get_setup: fun!(get_setup),
             setup_roots_iterator: fun!(setup_roots_iterator),
             screen_next: fun!(screen_next),
@@ -534,7 +538,8 @@ impl Xcb {
             query_pointer: fun!(query_pointer),
             query_pointer_reply: fun!(query_pointer_reply),
             destroy_window: fun!(destroy_window),
-            disconnect: fun!(disconnect),
+            // disconnect: fun!(disconnect),
+            create_colormap: fun!(create_colormap),
             _lib,
         }
     }

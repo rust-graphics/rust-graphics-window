@@ -1,10 +1,9 @@
 #![feature(drain_filter)]
 
-extern crate bitflags;
-extern crate libc;
-
-extern crate rust_graphics_library_loader as liblod;
-extern crate rust_graphics_log as log;
+pub extern crate bitflags;
+pub extern crate libc;
+pub extern crate rust_graphics_library_loader as library_loader;
+pub extern crate rust_graphics_log as log;
 
 pub mod event;
 

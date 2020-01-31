@@ -287,6 +287,7 @@ impl WindowState {
     }
 }
 
+#[cfg_attr(feature = "verbose_log", derive(Debug))]
 #[derive(Default, Clone)]
 pub struct TouchState {
     position: (i64, i64),
