@@ -15,9 +15,9 @@ pub struct Window {
     display: *mut x11::Display,
     _x11_xcb_lib: x11_xcb::X11Xcb,
     glx_lib: glx::Glx,
-    #[cfg(not(feature = "vulkan"))]
+    #[cfg(feature = "gl")]
     glx_window: glx::Window,
-    #[cfg(not(feature = "vulkan"))]
+    #[cfg(feature = "gl")]
     glx_context: glx::Context,
     xcb_lib: xcb::Xcb,
     connection: *mut xcb::Connection,
@@ -89,7 +89,7 @@ impl Window {
             value_list.as_ptr(),
         );
 
-        #[cfg(not(feature = "vulkan"))]
+        #[cfg(feature = "gl")]
         let (glx_context, glx_window) = {
             let visual_attribs = [
                 glx::X_RENDERABLE,
@@ -537,6 +537,21 @@ impl Window {
     pub fn get_event_engine(&self) -> &Engine {
         &self.event_engine
     }
+
+    #[cfg(feature = "gl")]
+    pub fn swap(&self) {
+        (self.glx_lib.swap_buffers)(self.display, self.glx_window);
+    }
+
+    #[cfg(feature = "gl")]
+    pub fn get_gl_function<T>(&self, s: &str) -> Option<T> {
+        let cs = CString::new(s).unwrap();
+        if let Some(f) = (self.glx_lib.get_proc_address)(cs.as_ptr()) {
+            Some(unsafe { transmute_copy(&f) })
+        } else {
+            None
+        }
+    }
 }
 
 unsafe impl Send for Window {}
@@ -552,10 +567,10 @@ impl std::fmt::Debug for Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
-        #[cfg(not(feature = "vulkan"))]
+        #[cfg(feature = "gl")]
         (self.glx_lib.destroy_window)(self.display, self.glx_window);
         (self.xcb_lib.destroy_window)(self.connection, self.window);
-        #[cfg(not(feature = "vulkan"))]
+        #[cfg(feature = "gl")]
         (self.glx_lib.destroy_context)(self.display, self.glx_context);
         (self.x11_lib.close_display)(self.display);
         #[cfg(feature = "verbose_log")]

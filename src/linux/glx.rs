@@ -44,6 +44,8 @@ pub struct Glx {
     pub create_window: extern "C" fn(*mut x11::Display, FBConfig, Window, c_int) -> Window,
     pub make_context_current:
         extern "C" fn(*mut x11::Display, Drawable, Drawable, Context) -> c_int,
+    pub swap_buffers: extern "C" fn(*mut x11::Display, Window),
+    pub get_proc_address: extern "C" fn(*const i8) -> Option<extern "C" fn()>,
     pub destroy_window: extern "C" fn(*mut x11::Display, Window),
     pub destroy_context: extern "C" fn(*mut x11::Display, Context),
     _lib: Linker,
@@ -63,6 +65,8 @@ impl Glx {
             create_new_context: fun!(glXCreateNewContext),
             create_window: fun!(glXCreateWindow),
             make_context_current: fun!(glXMakeContextCurrent),
+            swap_buffers: fun!(glXSwapBuffers),
+            get_proc_address: fun!(glXGetProcAddress),
             destroy_window: fun!(glXDestroyWindow),
             destroy_context: fun!(glXDestroyContext),
             _lib,

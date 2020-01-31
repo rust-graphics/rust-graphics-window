@@ -23,3 +23,5 @@ rust_graphics_android = {version = "*", path = "../rust-graphics-android"}
 [features]
 debug_derive = []
 verbose_log = ["debug_derive"]
+vulkan = []
+gl = []
