@@ -7,6 +7,7 @@ use {
         mem::{transmute, transmute_copy},
         os::raw::{c_int, c_uint},
         ptr::{null, null_mut},
+        sync::Arc,
     },
 };
 
@@ -28,7 +29,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(_: ()) -> Self {
+    pub fn new(_: ()) -> Arc<Self> {
         let x11_lib = x11::X11::new();
         let xcb_lib = xcb::Xcb::new();
         let _x11_xcb_lib = x11_xcb::X11Xcb::new();
@@ -257,7 +258,7 @@ impl Window {
         result
             .event_engine
             .init_mouse_position(result.get_mouse_position());
-        result
+        Arc::new(result)
     }
 
     pub fn fetch_events(&self) {

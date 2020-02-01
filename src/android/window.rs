@@ -56,6 +56,10 @@ impl Window {
         &self.event_engine
     }
 
+    pub fn get_window(&self) -> *mut window::ANativeWindow {
+        self.android_app.window
+    }
+
     pub fn fetch_events(&self) {
         if self.android_app.destroy_requested != 0 {
             #[cfg(feature = "verbose_log")]
