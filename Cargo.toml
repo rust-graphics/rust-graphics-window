@@ -37,8 +37,8 @@ js-sys = "*"
 rust-graphics-library-loader = {version = "*", path = "../rust-graphics-library-loader"}
 
 [features]
-debug_derive = []
-verbose_log = ["debug_derive"]
+debug-derive = []
+verbose-log = ["debug-derive"]
 vulkan = []
 gl = []
 default = ["gl"]

@@ -28,7 +28,7 @@ pub struct Window {
     event_engine: EventEngine,
 }
 
-#[cfg(feature = "debug_derive")]
+#[cfg(feature = "debug-derive")]
 impl std::fmt::Debug for Window {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Android Window")
@@ -62,7 +62,7 @@ impl Window {
 
     pub fn fetch_events(&self) {
         if self.android_app.destroy_requested != 0 {
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!("Android app has been terminated already waiting for main loop to terminate.");
             return;
         }
@@ -113,53 +113,53 @@ impl Window {
     fn handle_cmd(&self, cmd: AppCmd) {
         match cmd {
             AppCmd::InitWindow => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Window has been shown!");
             }
             AppCmd::TermWindow => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Window has been terminated.");
                 self.event_engine.quit();
             }
             AppCmd::GainedFocus => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has been focused.");
                 result_f!(self.state.lock()).focused = true;
                 self.event_engine.window_focus();
             }
             AppCmd::LostFocus => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has lost focus.");
                 result_f!(self.state.lock()).focused = false;
-                self.event_engine.window_unfocus();
+                self.event_engine.window_defocus();
             }
             AppCmd::Pause => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has been paused.");
                 result_f!(self.state.lock()).paused = true;
             }
             AppCmd::Start => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has been started.");
             }
             AppCmd::Resume => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has been resumed.");
                 result_f!(self.state.lock()).paused = false;
             }
             AppCmd::SaveState => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app should save its state.");
             }
             AppCmd::Stop => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Android app has been stoped.");
             }
             AppCmd::Destroy => {
                 log_i!("Android app has been destroyed.");
             }
             _c @ _ => {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!("Event {} not handled.", _c as i32);
             }
         }
@@ -191,7 +191,7 @@ impl Window {
                 _ => (),
             }
         } else if event_type & input::AInputEventType::Key as i32 != 0 {
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!("Unhandled");
         } else {
             unexpected_f!();
@@ -214,7 +214,7 @@ extern "C" fn handle_input(android_app: &mut AndroidApp, event: *mut input::AInp
     window.handle_input(event)
 }
 
-#[cfg(feature = "verbose_log")]
+#[cfg(feature = "verbose-log")]
 impl Drop for Window {
     fn drop(&mut self) {
         log_i!("Android Window droped.");

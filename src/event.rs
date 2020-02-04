@@ -1,4 +1,4 @@
-#[cfg(feature = "verbose_log")]
+#[cfg(feature = "verbose-log")]
 use log::log_i;
 use log::{result_f, unwrap_f};
 use std::{
@@ -14,7 +14,7 @@ use std::{
 
 pub type FingerIndexType = i64;
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 #[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Mouse {
     Left,
@@ -26,7 +26,7 @@ pub enum Mouse {
     Unknown(u32),
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 #[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Keyboard {
     A,
@@ -100,7 +100,7 @@ pub enum Keyboard {
     Unknown(u32),
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 #[derive(PartialEq, PartialOrd, Eq, Ord, Clone)]
 pub enum Button {
     Mouse(Mouse),
@@ -108,7 +108,7 @@ pub enum Button {
 }
 
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub struct WindowSizeChange {
     pub current: WindowAspects,
     pub previous: WindowAspects,
@@ -116,14 +116,14 @@ pub struct WindowSizeChange {
 }
 
 #[derive(Clone)]
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum Window {
     SizeChange(WindowSizeChange),
     Focus,
     Defocus,
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum Move {
     Mouse {
         previous: (i64, i64),
@@ -144,20 +144,20 @@ pub enum Move {
     },
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum ButtonAction {
     Press,
     Release,
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum TouchAction {
     Press,
     HardPress,
     Release,
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum TouchGesture {
     Tap, // todo
     Drag {
@@ -185,7 +185,7 @@ pub enum TouchGesture {
     },
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum GestureState {
     Started,
     InMiddle,
@@ -193,7 +193,7 @@ pub enum GestureState {
     Canceled,
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum Touch {
     Gesture {
         start_time: Instant,
@@ -209,7 +209,7 @@ pub enum Touch {
     },
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub enum Data {
     Move(Move),
     Button {
@@ -222,7 +222,7 @@ pub enum Data {
     Terminate,
 }
 
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub struct Event {
     id: u64,
     time: Instant,
@@ -262,7 +262,7 @@ pub trait Listener: Send + Sync {
 }
 
 #[derive(Default, Clone, Copy)]
-#[cfg_attr(feature = "debug_derive", derive(Debug))]
+#[cfg_attr(feature = "debug-derive", derive(Debug))]
 pub struct WindowAspects {
     width: i64,
     height: i64,
@@ -291,7 +291,7 @@ impl WindowState {
     }
 }
 
-#[cfg_attr(feature = "verbose_log", derive(Debug))]
+#[cfg_attr(feature = "verbose-log", derive(Debug))]
 #[derive(Default, Clone)]
 pub struct TouchState {
     position: (i64, i64),
@@ -628,7 +628,7 @@ impl Drop for Engine {
         if let Some(processor) = self.processor.take() {
             result_f!(processor.join());
         }
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("Rust-Graphics Window library's Event Engine dropped.");
     }
 }

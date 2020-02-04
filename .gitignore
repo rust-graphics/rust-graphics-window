@@ -2,3 +2,10 @@
 Cargo.lock
 **/*.rs.bk
 .idea/
+pkg/
+node_modules/
+*.png
+*.jpg
+*.exe
+*.wasm
+*.so

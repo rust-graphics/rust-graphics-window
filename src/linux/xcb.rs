@@ -545,7 +545,7 @@ impl Xcb {
     }
 }
 
-#[cfg(feature = "debug_derive")]
+#[cfg(feature = "debug-derive")]
 impl std::fmt::Debug for Xcb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Xcb-Library")

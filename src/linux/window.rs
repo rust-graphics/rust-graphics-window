@@ -134,7 +134,7 @@ impl Window {
                 log_f!("glXGetFBConfigs failed");
             }
 
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!("Found {} matching FB configs", num_fb_configs);
 
             let fb_config = unsafe { *fb_configs };
@@ -149,7 +149,7 @@ impl Window {
                 log_f!("Failed to get Visual ID");
             }
 
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!(
                 "Visual ID of the selected FB config is {} and Root Visual ID is {}.",
                 visual_id,
@@ -559,7 +559,7 @@ unsafe impl Send for Window {}
 
 unsafe impl Sync for Window {}
 
-#[cfg(feature = "debug_derive")]
+#[cfg(feature = "debug-derive")]
 impl std::fmt::Debug for Window {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Xcb-Window")
@@ -574,7 +574,7 @@ impl Drop for Window {
         #[cfg(feature = "gl")]
         (self.glx_lib.destroy_context)(self.display, self.glx_context);
         (self.x11_lib.close_display)(self.display);
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("Rust-Graphics Window dropped.");
     }
 }
