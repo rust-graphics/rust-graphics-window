@@ -396,7 +396,7 @@ impl Window {
             xproto::KEY_COMMA_0 => Keyboard::Comma(0),
             xproto::KEY_SLASH_0 => Keyboard::Slash(0),
             xproto::KEY_SLASH_1 => Keyboard::Slash(1),
-            xproto::KEY_CAPS_LOCK_0 => Keyboard::CapseLock(0),
+            xproto::KEY_CAPS_LOCK_0 => Keyboard::CapsLock(0),
             xproto::KEY_SEMICOLON => Keyboard::SemiColon,
             xproto::KEY_QUOTE => Keyboard::Quote,
             xproto::KEY_TAB_0 => Keyboard::Tab,
@@ -424,86 +424,86 @@ impl Window {
             xproto::KEY_ARROW_RIGHT => Keyboard::ArrowRight,
             xproto::KEY_NUM_0 => Keyboard::Number {
                 number: 0,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_1 => Keyboard::Number {
                 number: 1,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_2 => Keyboard::Number {
                 number: 2,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_3 => Keyboard::Number {
                 number: 3,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_4 => Keyboard::Number {
                 number: 4,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_5 => Keyboard::Number {
                 number: 5,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_6 => Keyboard::Number {
                 number: 6,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_7 => Keyboard::Number {
                 number: 7,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_8 => Keyboard::Number {
                 number: 8,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_9 => Keyboard::Number {
                 number: 9,
-                padd: false,
+                pad: false,
             },
             xproto::KEY_NUM_PAD_0 => Keyboard::Number {
                 number: 0,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_1 => Keyboard::Number {
                 number: 1,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_2 => Keyboard::Number {
                 number: 2,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_3 => Keyboard::Number {
                 number: 3,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_4 => Keyboard::Number {
                 number: 4,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_5 => Keyboard::Number {
                 number: 5,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_6 => Keyboard::Number {
                 number: 6,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_7 => Keyboard::Number {
                 number: 7,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_8 => Keyboard::Number {
                 number: 8,
-                padd: true,
+                pad: true,
             },
             xproto::KEY_NUM_PAD_9 => Keyboard::Number {
                 number: 9,
-                padd: true,
+                pad: true,
             },
             k @ _ => {
-                log_e!("Unknown key: {:?} presse", k);
+                log_e!("Unknown key: {:?} pressed", k);
                 Keyboard::Unknown(k as u32)
             }
         })
@@ -522,8 +522,8 @@ impl Window {
     }
 
     fn get_mouse_position(&self) -> (i64, i64) {
-        let coockie = (self.xcb_lib.query_pointer)(self.connection, self.window);
-        let replay = (self.xcb_lib.query_pointer_reply)(self.connection, coockie, null_mut());
+        let cookie = (self.xcb_lib.query_pointer)(self.connection, self.window);
+        let replay = (self.xcb_lib.query_pointer_reply)(self.connection, cookie, null_mut());
         if replay.is_null() {
             log_f!("Can not fetch mouse position.");
         }
@@ -575,6 +575,6 @@ impl Drop for Window {
         (self.glx_lib.destroy_context)(self.display, self.glx_context);
         (self.x11_lib.close_display)(self.display);
         #[cfg(feature = "verbose_log")]
-        log_i!("Rust-Graphics's Window droped.");
+        log_i!("Rust-Graphics Window dropped.");
     }
 }

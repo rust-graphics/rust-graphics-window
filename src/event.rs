@@ -22,7 +22,7 @@ pub enum Mouse {
     Middle,
     Back,
     Forward,
-    Offic,
+    Office,
     Unknown(u32),
 }
 
@@ -61,7 +61,7 @@ pub enum Keyboard {
     ScrollLock,
     PauseBreak,
     BackQuote,
-    Number { number: i32, padd: bool },
+    Number { number: i32, pad: bool },
     Backspace,
     Delete,
     Insert,
@@ -79,7 +79,7 @@ pub enum Keyboard {
     Tab,
     BracketLeft,
     BracketRight,
-    CapseLock(u8),
+    CapsLock(u8),
     SemiColon,
     Quote,
     BackSlash(u8),
@@ -120,7 +120,7 @@ pub struct WindowSizeChange {
 pub enum Window {
     SizeChange(WindowSizeChange),
     Focus,
-    Unfocus,
+    Defocus,
 }
 
 #[cfg_attr(feature = "debug_derive", derive(Debug))]
@@ -253,7 +253,11 @@ impl Event {
     }
 }
 
+/// Every structure that want to receive events must implement this trait.
 pub trait Listener: Send + Sync {
+    /// This function will receive the event, it the listener is the final
+    /// receiver or the event should not propagate anymore, implementor
+    /// must return true, otherwise false.
     fn on_event(&mut self, event: &Event) -> bool;
 }
 
@@ -613,8 +617,8 @@ impl Engine {
         self.broadcast(Event::new(Data::Window(Window::Focus)));
     }
 
-    pub(crate) fn window_unfocus(&self) {
-        self.broadcast(Event::new(Data::Window(Window::Unfocus)));
+    pub(crate) fn window_defocus(&self) {
+        self.broadcast(Event::new(Data::Window(Window::Defocus)));
     }
 }
 
@@ -625,6 +629,6 @@ impl Drop for Engine {
             result_f!(processor.join());
         }
         #[cfg(feature = "verbose_log")]
-        log_i!("Rust-Graphics's Window library's Event Engine droped.");
+        log_i!("Rust-Graphics Window library's Event Engine dropped.");
     }
 }

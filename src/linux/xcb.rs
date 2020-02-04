@@ -456,7 +456,7 @@ impl Default for QueryPointerReply {
 pub(crate) const COPY_FROM_PARENT: u64 = 0;
 
 pub(crate) struct Xcb {
-    // pub(crate) connect: unsafe extern "C" fn(displayname: *const c_char, screenp: *mut c_int) -> *mut Connection,
+    // pub(crate) connect: unsafe extern "C" fn(display_name: *const c_char, screen_p: *mut c_int) -> *mut Connection,
     pub(crate) get_setup: extern "C" fn(c: *mut Connection) -> *const Setup,
     pub(crate) setup_roots_iterator: extern "C" fn(R: *const Setup) -> ScreenIterator,
     pub(crate) screen_next: extern "C" fn(i: *mut ScreenIterator),

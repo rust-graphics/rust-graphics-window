@@ -1,27 +1,44 @@
 [package]
-name = "rust_graphics_window"
+name = "rust-graphics-window"
 version = "0.1.2"
 authors = ["Hossein Noroozpour <hossein.noroozpour@gmail.com>"]
 description = "A simple, small and minimal windowing library"
 repository = "https://github.com/rust-graphics/rust-graphics-window"
 license = "MIT"
 readme = "README.md"
-keywords = ["ffi", "window", "graphics"]
-categories = ["graphics"]
+keywords = ["window", "graphics", "ui"]
+categories = ["gui"]
 
 [dependencies]
-bitflags = "1.2"
-libc = "0.2"
+bitflags = "*"
+libc = "*"
 
-rust_graphics_library_loader = "0.1"
-rust_graphics_log = "0.1"
-rust_graphics_main = {version = "*", path = "../rust-graphics-main"}
+rust-graphics-log = {version = "*", path = "../rust-graphics-log"}
+rust-graphics-main = {version = "*", path = "../rust-graphics-main"}
 
 [target.'cfg(target_os = "android")'.dependencies]
-rust_graphics_android = {version = "*", path = "../rust-graphics-android"}
+rust-graphics-android = {version = "*", path = "../rust-graphics-android"}
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "*"
+features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
+]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "*"
+js-sys = "*"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rust-graphics-library-loader = {version = "*", path = "../rust-graphics-library-loader"}
 
 [features]
 debug_derive = []
 verbose_log = ["debug_derive"]
 vulkan = []
 gl = []
+default = ["gl"]
